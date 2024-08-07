@@ -30,7 +30,7 @@ import {
   deletePunishment,
 } from "@/lib"
 import { Member } from "@/common.types"
-import DataWrapper from "../ui/DataWrapper"
+import DataWrapper from "@/components/ui/DataWrapper"
 
 export default function MembersPage() {
   const { userId, getToken } = useAuth()

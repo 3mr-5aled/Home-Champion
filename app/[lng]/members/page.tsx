@@ -50,6 +50,7 @@ const MembersPage = () => {
     reason: "",
     amount: 0,
   })
+
   // Fetch members
   useEffect(() => {
     const fetchMembers = async () => {
@@ -59,42 +60,34 @@ const MembersPage = () => {
           userId,
           token,
         })
-        setMembers(fetchedMembers) // Use the fetched members if they exist, otherwise use an empty array
-        console.log(fetchedMembers)
+        setMembers(fetchedMembers || [])
+        console.log("Fetched Members:", fetchedMembers)
       } else {
-        // Handle the case when token is null
-        // You can display an error message or take any other appropriate action
         toast.error("Failed to get the token")
       }
     }
-    fetchMembers()
+
+    if (userId) {
+      fetchMembers()
+    }
   }, [userId, getToken])
 
-  // add member handler
   const handleAddMember = async (e: React.FormEvent<HTMLInputElement>) => {
     e.preventDefault()
-
     try {
       const token = await getToken({ template: "supabase" })
       if (!token) {
         toast.error("Failed to get the token.")
         return
       }
-
       const result = await addMember({ userId, token, newMember })
       if (!result) {
         toast.error("Failed to add member.")
         return
       }
-
       const updatedMembers: Member[] = await getMembers({ userId, token })
       setMembers(updatedMembers)
-      setNewMember({
-        name: "",
-        role: "",
-        points: 0,
-        pointsDeducted: [],
-      })
+      setNewMember({ name: "", role: "", points: 0, pointsDeducted: [] })
       setIsAddOpen(false)
       toast.success("Member added successfully!")
     } catch (error) {
@@ -103,22 +96,18 @@ const MembersPage = () => {
     }
   }
 
-  // edit member handler
   const handleEditMember = async (e: React.FormEvent<HTMLInputElement>) => {
     e.preventDefault()
-
     const token = await getToken({ template: "supabase" })
     if (!token) {
       toast.error("Failed to get the token.")
       return
     }
-
     const result = await updateMember({ token, memberEdited })
     if (!result) {
       toast.error("Failed to edit member.")
       return
     }
-
     const updatedMembers = await getMembers({ userId, token })
     setMembers(updatedMembers || [])
     setMemberEdited({
@@ -134,51 +123,43 @@ const MembersPage = () => {
     toast.success("Member edited successfully!")
   }
 
-  // delete member handler
   const handleDeleteMember = async (memberToDelete: Member) => {
     const token = await getToken({ template: "supabase" })
     if (!token) {
       toast.error("Failed to get the token.")
       return
     }
-
     const result = await deleteMember({ token, memberToDelete })
     if (!result) {
       toast.error("Failed to add member.")
       return
     }
-
     const updatedMembers = await getMembers({ userId, token })
     setMembers(updatedMembers || [])
-    // setMembers(members.filter((member) => member.name !== memberToDelete.name))
     toast.success("Member deleted successfully!")
   }
 
-  // Deduct points
   const handleDeductPoints = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
-
     if (!selectedMember) {
       toast.error("No member selected for point deduction.")
       return
     }
-
     const token = await getToken({ template: "supabase" })
     if (!token) {
       toast.error("Failed to get the token.")
       return
     }
-
     const updatedMember = await deductPoints({
       token,
       memberData: selectedMember,
       pointsToDeduct: deductionDetails.amount,
       reason: deductionDetails.reason,
     })
-
     if (updatedMember) {
       const updatedMembers = await getMembers({ userId, token })
       setMembers(updatedMembers || [])
+      updateSelectedMember(updatedMembers, selectedMember.id)
       setDeductionDetails({ reason: "", amount: 0 })
       setIsDeductOpen(false)
       toast.success("Points deducted successfully!")
@@ -187,25 +168,31 @@ const MembersPage = () => {
     }
   }
 
-  const updateSelectedMember = (members: Member[], memberId: string) => {
-    const updatedMember =
-      members.find((m) => m.id === memberId) || setSelectedMember(updatedMember)
+  const updateSelectedMember = (members: Member[], memberId: number) => {
+    const updatedMember: Member | undefined = members.find(
+      (m) => m.id === memberId
+    )
+    setSelectedMember(updatedMember ?? null)
   }
 
-  const handleDeleteChore = async (member, choreIndex) => {
+  const handleDeleteChore = async (member: Member, choreIndex: number) => {
     const token = await getToken({ template: "supabase" })
     if (!token) {
       toast.error("Failed to get the token.")
       return
     }
-    const choreId = member.chore[choreIndex].id
+    if (!member) {
+      toast.error("Failed to get the member.")
+      return
+    }
+    const choreId = member.chore?.[choreIndex]?.id
     const result = await deleteRelatedChore({
       token,
       memberId: member.id,
       choreId,
     })
     if (result) {
-      const updatedMembers = await getMembers({ userId, token })
+      const updatedMembers: Member[] = await getMembers({ userId, token })
       setMembers(updatedMembers || [])
       updateSelectedMember(updatedMembers, member.id)
       toast.success("Chore deleted successfully!")
@@ -214,13 +201,13 @@ const MembersPage = () => {
     }
   }
 
-  const handleDeleteReward = async (member, rewardIndex) => {
+  const handleDeleteReward = async (member: Member, rewardIndex: number) => {
     const token = await getToken({ template: "supabase" })
     if (!token) {
       toast.error("Failed to get the token.")
       return
     }
-    const rewardId = member.reward[rewardIndex].id
+    const rewardId = member.reward?.[rewardIndex]?.id
     const result = await deleteRelatedReward({
       token,
       memberId: member.id,
@@ -236,7 +223,10 @@ const MembersPage = () => {
     }
   }
 
-  const handleDeleteDeduction = async (member, deductionIndex) => {
+  const handleDeleteDeduction = async (
+    member: Member,
+    deductionIndex: number
+  ) => {
     const token = await getToken({ template: "supabase" })
     if (!token) {
       toast.error("Failed to get the token.")

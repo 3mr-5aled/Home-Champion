@@ -5,29 +5,15 @@ export type Member = {
   points: number
   user_id?: string
   role?: string
+  date?: string[]
+  count?: number
   pointsDeducted?: {
     date: string
     points: number
     reason: string
   }[]
-  reward?: {
-    id: number
-    name: string
-    count: number
-    date: string[]
-    points: number
-    created_at: string
-    description: string
-  }[]
-  chore?: {
-    id: number
-    name: string
-    count: number
-    date: string[]
-    points: number
-    members?: Member[] // Members as array of Member objects
-    created_at?: string
-  }[]
+  reward?: Reward[]
+  chore?: Chore[]
 }
 
 export type Chore = {

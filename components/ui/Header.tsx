@@ -8,8 +8,8 @@ interface HeaderProps {
 }
 
 const Header = ({ title, description, children }: HeaderProps) => (
-  <div className="flex items-center justify-between mb-8">
-    <div className="flex flex-row">
+  <div className="flex items-center justify-between flex-wrap mb-8">
+    <div className="flex flex-row items-center">
       <Link
         href="/"
         className="bg-base-200 rounded-full border-2 w-fit h-fit border-white text-white p-3 mx-3 font-bold"
@@ -27,7 +27,9 @@ const Header = ({ title, description, children }: HeaderProps) => (
       </div>
     </div>
     {/* buttons */}
-    <div>{children}</div>
+    <div className="w-full lg:w-fit flex flex-wrap gap-2 justify-end mt-4">
+      {children}
+    </div>
   </div>
 )
 

@@ -1,3 +1,4 @@
+import { Chore } from "@/common.types"
 import { supabaseClient } from "../supabaseClient"
 
 // get chores
@@ -123,35 +124,166 @@ export const updateChore = async ({ token, choreEdited }) => {
   }
 }
 
-// TODO need work Delete a chore (update status into removed and remove it if it doesn't exsit in the database)
-export const deleteChore = async ({ token, choreToDelete }) => {
+// Delete a chore (update status into removed)
+export const deleteChore = async ({
+  token,
+  choreToDelete,
+}: {
+  token: string
+  choreToDelete: Chore
+}): Promise<boolean> => {
   const supabase = await supabaseClient(token)
-  const response = await supabase
-    .from("chore")
-    .update({ status: "removed" })
-    .eq("id", choreToDelete.id)
-  return response
+
+  try {
+    const { error } = await supabase
+      .from("chore")
+      .update({ status: "removed" })
+      .eq("id", choreToDelete.id)
+
+    if (error) {
+      console.error("Error updating chore status to removed:", error.message)
+      return false
+    }
+
+    return true
+  } catch (error) {
+    console.error("Error deleting chore:", error.message)
+    return false
+  }
 }
+
+// Get removed chores
 export const getDeletedChore = async ({ userId, token }) => {
   const supabase = await supabaseClient(token)
-  const response = await supabase
+  const { data: removedChores, error } = await supabase
     .from("chore")
     .select("*")
     .eq("status", "removed")
     .eq("user_id", userId)
 
-  return response
+  if (error) {
+    console.error("Error fetching removed chores:", error.message)
+    return []
+  }
+
+  return removedChores
 }
 
-// TODO delete forever and delete any related data
-// export const deleteChore = async ({ token, choreToDelete }) => {
-//   const supabase = await supabaseClient(token)
-//   const response = await supabase
-//     .from("chore")
-//     .delete()
-//     .eq("id", choreToDelete.id)
-//   return response
-// }
+// Permanently delete a chore and any related data
+export const deleteChorePermanently = async ({
+  token,
+  choreToDelete,
+}: {
+  token: string
+  choreToDelete: Chore
+}): Promise<boolean> => {
+  const supabase = await supabaseClient(token)
+
+  try {
+    // Check if the chore is related to any members
+    const { data: memberChores, error: memberChoreError } = await supabase
+      .from("member_chore")
+      .select("member_id, count")
+      .eq("chore_id", choreToDelete.id)
+
+    if (memberChoreError) {
+      console.error("Error fetching member chores:", memberChoreError.message)
+      return false
+    }
+
+    if (memberChores.length > 0) {
+      // Chore is related to members, deduct points and delete related items
+      for (const memberChore of memberChores) {
+        const { member_id, count } = memberChore
+
+        // Fetch chore details to get points
+        const { data: choreData, error: choreError } = await supabase
+          .from("chore")
+          .select("points")
+          .eq("id", choreToDelete.id)
+          .single()
+
+        if (choreError) {
+          console.error("Error fetching chore details:", choreError.message)
+          return false
+        }
+
+        const { points } = choreData
+
+        // Deduct points from the member
+        const { error: memberError } = await supabase
+          .from("members")
+          .update({
+            points: supabase.raw(`points - ${points * count}`),
+          })
+          .eq("id", member_id)
+
+        if (memberError) {
+          console.error(
+            "Error deducting points from member:",
+            memberError.message
+          )
+          return false
+        }
+
+        // Delete related item from member_chore
+        const { error: deleteMemberChoreError } = await supabase
+          .from("member_chore")
+          .delete()
+          .eq("id", memberChore.id)
+
+        if (deleteMemberChoreError) {
+          console.error(
+            "Error deleting member chore:",
+            deleteMemberChoreError.message
+          )
+          return false
+        }
+      }
+    }
+
+    // Delete the chore from chores table
+    const { error: deleteChoreError } = await supabase
+      .from("chore")
+      .delete()
+      .eq("id", choreToDelete.id)
+
+    if (deleteChoreError) {
+      console.error("Error deleting chore:", deleteChoreError.message)
+      return false
+    }
+
+    return true
+  } catch (error) {
+    console.error("Error deleting chore permanently:", error.message)
+    return false
+  }
+}
+
+interface CheckChoreRelationParams {
+  token: string
+  choreToDelete: Chore
+}
+
+export const checkChoreRelation = async ({
+  token,
+  choreToDelete,
+}: CheckChoreRelationParams): Promise<{ isRelated: boolean }> => {
+  const supabase = await supabaseClient(token)
+
+  const { data, error } = await supabase
+    .from("member_chore")
+    .select("id")
+    .eq("chore_id", choreToDelete.id)
+    .single()
+
+  if (error) {
+    console.error("Error checking chore relation:", error)
+    return { isRelated: false }
+  }
+
+  return { isRelated: !!data }
+}
 
 // Claim a chore
 export const claimChore = async ({ token, chore, member }) => {

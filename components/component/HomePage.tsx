@@ -28,7 +28,7 @@ import {
   SelectContent,
   SelectItem,
 } from "@/components/ui/select"
-import { Progress } from "../ui/progress"
+import { Progress } from "@/components/ui/progress"
 import { Member } from "@/common.types"
 
 import {

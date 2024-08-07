@@ -11,9 +11,9 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from "../ui/dialog"
-import { Label } from "../ui/label"
-import { Input } from "../ui/input"
+} from "@/components/ui/dialog"
+import { Label } from "@/components/ui/label"
+import { Input } from "@/components/ui/input"
 import { toast } from "react-toastify"
 import { Chore, Member } from "@/common.types"
 import {
@@ -258,7 +258,7 @@ export default function ChoresPage() {
                 Manage Chores
               </button>
             </DialogTrigger>
-            <DialogContent className="max-h-[80%] overflow-y-auto sm:max-w-[425px]">
+            <DialogContent className="max-h-4/5 overflow-y-auto sm:max-w-[425px]">
               <DialogHeader>
                 <DialogTitle>Manage the Chores</DialogTitle>
                 <DialogDescription>Edit & Delete the Chores</DialogDescription>

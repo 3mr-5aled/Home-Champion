@@ -37,13 +37,21 @@ const MemberCard: React.FC<MemberCardProps> = ({
         <div className="flex justify-between items-center">
           <div>Chores Completed</div>
           <div className="font-semibold">
-            {member.chore ? member.chore.length : "0"}
+            {/* {member.chore ? member.chore.length : "0"} */}
+            {member.chore?.reduce(
+              (total, chore) => total + (chore.count || 0),
+              0
+            ) || "0"}
           </div>
         </div>
         <div className="flex justify-between items-center">
           <div>Rewards Earned</div>
           <div className="font-semibold">
-            {member.reward ? member.reward.length : "0"}
+            {/* {member.reward ? member.reward.length : "0"} */}
+            {member.reward?.reduce(
+              (total, reward) => total + (reward.count || 0),
+              0
+            ) || "0"}
           </div>
         </div>
         <div className="flex justify-between items-center">

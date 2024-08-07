@@ -11,9 +11,9 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from "../ui/dialog"
-import { Label } from "../ui/label"
-import { Input } from "../ui/input"
+} from "@/components/ui/dialog"
+import { Label } from "@/components/ui/label"
+import { Input } from "@/components/ui/input"
 import { toast } from "react-toastify"
 import { Reward, Member } from "@/common.types"
 import {
@@ -25,7 +25,7 @@ import {
   getMembersRewards,
 } from "@/lib/requests"
 import { useAuth } from "@clerk/nextjs"
-import { Loading } from "../ui/loading"
+import { Loading } from "@/components/ui/loading"
 
 export default function RewardsPage() {
   const [rewards, setRewards] = useState<Reward[]>([])
@@ -274,7 +274,7 @@ export default function RewardsPage() {
                 Manage Rewards
               </button>
             </DialogTrigger>
-            <DialogContent className="max-h-[80%] overflow-y-auto sm:max-w-[425px]">
+            <DialogContent className="max-h-4/5 overflow-y-auto sm:max-w-[425px]">
               <DialogHeader>
                 <DialogTitle>Manage the Rewards</DialogTitle>
                 <DialogDescription>Edit & Delete the Rewards</DialogDescription>

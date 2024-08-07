@@ -2,5 +2,9 @@
     "i18n-ally.localesPaths": [
         "app/i18n",
         "app/i18n/locales"
+    ],
+    "cSpell.words": [
+        "nextjs",
+        "toastify"
     ]
 }
