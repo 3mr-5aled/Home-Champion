@@ -45,7 +45,8 @@ export default function AboutAppInfo() {
             <p className="text-muted-foreground mb-4">
               John is a passionate app developer with a keen eye for design and
               user experience. He has been creating mobile apps for over 5 years
-              and is always striving to push the boundaries of what's possible.
+              and is always striving to push the boundaries of what&#39;s
+              possible.
             </p>
             <div className="flex gap-4">
               <Link

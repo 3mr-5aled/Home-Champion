@@ -440,7 +440,7 @@ export default function HomePage({ appName }: { appName: string }) {
               <CardHeader>
                 <CardTitle>Leaderboard</CardTitle>
                 <CardDescription>
-                  See who's leading the competition.
+                  See who&#39;s leading the competition.
                 </CardDescription>
               </CardHeader>
               <CardContent>
