@@ -1,4 +1,4 @@
-# 🏆 Home Champion
+# 🏆 Home Champion (Under Development)
 
 A fun and rewarding way to manage family chores! Built with **Next.js**, **TypeScript**, **TailwindCSS**, **DaisyUI**, **Supabase**, and **Clerk**.
 
