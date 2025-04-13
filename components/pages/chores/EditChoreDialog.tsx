@@ -19,7 +19,7 @@ interface EditChoreDialogProps {
     name: string
     points: number
   }) => void
-  handleEditChore: () => void
+  handleEditChore: (e: React.FormEvent<HTMLFormElement>) => void
   loading: boolean
 }
 

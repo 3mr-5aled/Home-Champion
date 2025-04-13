@@ -36,9 +36,9 @@ export async function getChores({
 
   // Merge member_chore data into members object
   chores.forEach((chore) => {
-    chore.members = chore.members.map((member) => {
+    chore.members = chore.members.map((member: any) => {
       const memberChore = chore.member_chore.find(
-        (mc) => mc.member_id === member.id
+        (mc: any) => mc.member_id === member.id
       )
       return memberChore
         ? { ...member, count: memberChore.count, date: memberChore.date }
@@ -73,7 +73,15 @@ export async function getMembersChores({
 }
 
 // add a chore
-export const addChore = async ({ userId, token, newChore }) => {
+export const addChore = async ({
+  userId,
+  token,
+  newChore,
+}: {
+  userId: string
+  token: string
+  newChore: any
+}) => {
   const supabase = await supabaseClient(token)
   try {
     // Perform the insertion
@@ -84,20 +92,26 @@ export const addChore = async ({ userId, token, newChore }) => {
 
     // Check if there's an error
     if (error) {
-      console.error("Error adding chore:", error.message)
+      console.error("Error adding chore:", (error as unknown as Error).message)
       return null
     }
 
     // Return the inserted data
     return data
   } catch (error) {
-    console.error("Error adding chore:", error.message)
+    console.error("Error adding chore:", (error as Error).message)
     return null
   }
 }
 
 // update a chore
-export const updateChore = async ({ token, choreEdited }) => {
+export const updateChore = async ({
+  token,
+  choreEdited,
+}: {
+  token: string
+  choreEdited: { id: string; name: string; points: number }
+}) => {
   const supabase = await supabaseClient(token)
   try {
     const { data, error } = await supabase
@@ -112,14 +126,17 @@ export const updateChore = async ({ token, choreEdited }) => {
 
     // Check if there's an error
     if (error) {
-      console.error("Error updating chore:", error.message)
+      console.error(
+        "Error updating chore:",
+        (error as unknown as Error).message
+      )
       return null
     }
 
     // Return the updated data
     return data
   } catch (error) {
-    console.error("Error updating chore:", error.message)
+    console.error("Error updating chore:", (error as Error).message)
     return null
   }
 }
@@ -147,13 +164,19 @@ export const deleteChore = async ({
 
     return true
   } catch (error) {
-    console.error("Error deleting chore:", error.message)
+    console.error("Error deleting chore:", (error as Error).message)
     return false
   }
 }
 
 // Get removed chores
-export const getDeletedChore = async ({ userId, token }) => {
+export const getDeletedChore = async ({
+  userId,
+  token,
+}: {
+  userId: string
+  token: string
+}) => {
   const supabase = await supabaseClient(token)
   const { data: removedChores, error } = await supabase
     .from("chore")
@@ -214,7 +237,7 @@ export const deleteChorePermanently = async ({
         const { error: memberError } = await supabase
           .from("members")
           .update({
-            points: supabase.raw(`points - ${points * count}`),
+            points: supabase.rpc("subtract_points", { points: points * count }),
           })
           .eq("id", member_id)
 
@@ -230,7 +253,7 @@ export const deleteChorePermanently = async ({
         const { error: deleteMemberChoreError } = await supabase
           .from("member_chore")
           .delete()
-          .eq("id", memberChore.id)
+          .eq("id", (memberChore as any).id)
 
         if (deleteMemberChoreError) {
           console.error(
@@ -255,7 +278,7 @@ export const deleteChorePermanently = async ({
 
     return true
   } catch (error) {
-    console.error("Error deleting chore permanently:", error.message)
+    console.error("Error deleting chore permanently:", (error as Error).message)
     return false
   }
 }
@@ -286,7 +309,15 @@ export const checkChoreRelation = async ({
 }
 
 // Claim a chore
-export const claimChore = async ({ token, chore, member }) => {
+export const claimChore = async ({
+  token,
+  chore,
+  member,
+}: {
+  token: string
+  chore: { id: string; points: number }
+  member: { id: string; points: number }
+}) => {
   const supabase = await supabaseClient(token)
   try {
     // Increment member's points
@@ -316,7 +347,7 @@ export const claimChore = async ({ token, chore, member }) => {
       .eq("chore_id", chore.id)
       .single()
 
-    if (fetchError && fetchError.code !== "PGRST116") {
+    if (fetchError && (fetchError as any).code !== "PGRST116") {
       console.error("Error fetching existing member chore:", fetchError.message)
       return null
     }
@@ -370,7 +401,7 @@ export const claimChore = async ({ token, chore, member }) => {
       return { memberData, memberChoreData }
     }
   } catch (error) {
-    console.error("Error claiming chore:", error.message)
+    console.error("Error claiming chore:", (error as Error).message)
     return null
   }
 }

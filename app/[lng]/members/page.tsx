@@ -32,13 +32,15 @@ const MembersPage = () => {
   const [isEditOpen, setIsEditOpen] = useState(false)
   const [isDeductOpen, setIsDeductOpen] = useState(false)
   const [isViewDetailsOpen, setIsViewDetailsOpen] = useState(false)
-  const [newMember, setNewMember] = useState({
+  const [newMember, setNewMember] = useState<Member>({
+    id: 0, // Default id value
     name: "",
     role: "",
     points: 0,
     pointsDeducted: [],
   })
-  const [memberEdited, setMemberEdited] = useState({
+  const [memberEdited, setMemberEdited] = useState<Member>({
+    id: 0, // Default id value
     name: "",
     role: "",
     points: 0,
@@ -57,7 +59,7 @@ const MembersPage = () => {
       const token = await getToken({ template: "supabase" })
       if (token) {
         const fetchedMembers: Member[] | null = await getMembers({
-          userId,
+          userId: userId ?? "",
           token,
         })
         setMembers(fetchedMembers || [])
@@ -72,7 +74,7 @@ const MembersPage = () => {
     }
   }, [userId, getToken])
 
-  const handleAddMember = async (e: React.FormEvent<HTMLInputElement>) => {
+  const handleAddMember = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     try {
       const token = await getToken({ template: "supabase" })
@@ -80,14 +82,22 @@ const MembersPage = () => {
         toast.error("Failed to get the token.")
         return
       }
+      if (!userId) {
+        toast.error("User ID is missing.")
+        return
+      }
       const result = await addMember({ userId, token, newMember })
       if (!result) {
         toast.error("Failed to add member.")
         return
       }
+      if (!userId) {
+        toast.error("User ID is missing.")
+        return
+      }
       const updatedMembers: Member[] = await getMembers({ userId, token })
       setMembers(updatedMembers)
-      setNewMember({ name: "", role: "", points: 0, pointsDeducted: [] })
+      setNewMember({ id: 0, name: "", role: "", points: 0, pointsDeducted: [] })
       setIsAddOpen(false)
       toast.success("Member added successfully!")
     } catch (error) {
@@ -96,21 +106,33 @@ const MembersPage = () => {
     }
   }
 
-  const handleEditMember = async (e: React.FormEvent<HTMLInputElement>) => {
+  const handleEditMember = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     const token = await getToken({ template: "supabase" })
     if (!token) {
       toast.error("Failed to get the token.")
       return
     }
-    const result = await updateMember({ token, memberEdited })
+    const result = await updateMember({
+      token,
+      memberEdited: {
+        ...memberEdited,
+        id: memberEdited.id.toString(),
+        role: memberEdited.role || "defaultRole",
+      },
+    })
     if (!result) {
       toast.error("Failed to edit member.")
       return
     }
-    const updatedMembers = await getMembers({ userId, token })
+    if (!userId) {
+      toast.error("User ID is missing.")
+      return
+    }
+    const updatedMembers = await getMembers({ userId: userId ?? "", token })
     setMembers(updatedMembers || [])
     setMemberEdited({
+      id: 0, // Default id value
       name: "",
       role: "",
       points: 0,
@@ -129,12 +151,15 @@ const MembersPage = () => {
       toast.error("Failed to get the token.")
       return
     }
-    const result = await deleteMember({ token, memberToDelete })
+    const result = await deleteMember({
+      token,
+      memberToDelete: { id: memberToDelete.id.toString() },
+    })
     if (!result) {
       toast.error("Failed to add member.")
       return
     }
-    const updatedMembers = await getMembers({ userId, token })
+    const updatedMembers = await getMembers({ userId: userId ?? "", token })
     setMembers(updatedMembers || [])
     toast.success("Member deleted successfully!")
   }
@@ -157,7 +182,7 @@ const MembersPage = () => {
       reason: deductionDetails.reason,
     })
     if (updatedMember) {
-      const updatedMembers = await getMembers({ userId, token })
+      const updatedMembers = await getMembers({ userId: userId ?? "", token })
       setMembers(updatedMembers || [])
       updateSelectedMember(updatedMembers, selectedMember.id)
       setDeductionDetails({ reason: "", amount: 0 })
@@ -188,11 +213,14 @@ const MembersPage = () => {
     const choreId = member.chore?.[choreIndex]?.id
     const result = await deleteRelatedChore({
       token,
-      memberId: member.id,
-      choreId,
+      memberId: member.id.toString(),
+      choreId: choreId?.toString() || "",
     })
     if (result) {
-      const updatedMembers: Member[] = await getMembers({ userId, token })
+      const updatedMembers: Member[] = await getMembers({
+        userId: userId ?? "",
+        token,
+      })
       setMembers(updatedMembers || [])
       updateSelectedMember(updatedMembers, member.id)
       toast.success("Chore deleted successfully!")
@@ -210,11 +238,11 @@ const MembersPage = () => {
     const rewardId = member.reward?.[rewardIndex]?.id
     const result = await deleteRelatedReward({
       token,
-      memberId: member.id,
-      rewardId,
+      memberId: member.id.toString(),
+      rewardId: rewardId?.toString() || "",
     })
     if (result) {
-      const updatedMembers = await getMembers({ userId, token })
+      const updatedMembers = await getMembers({ userId: userId ?? "", token })
       setMembers(updatedMembers || [])
       updateSelectedMember(updatedMembers, member.id)
       toast.success("Reward deleted successfully!")
@@ -238,7 +266,7 @@ const MembersPage = () => {
       punishmentIndex: deductionIndex,
     })
     if (result) {
-      const updatedMembers = await getMembers({ userId, token })
+      const updatedMembers = await getMembers({ userId: userId ?? "", token })
       setMembers(updatedMembers || [])
       updateSelectedMember(updatedMembers, member.id)
       toast.success("Deduction deleted successfully!")

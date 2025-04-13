@@ -1,7 +1,13 @@
 import { Member } from "@/common.types"
 import { supabaseClient } from "../supabaseClient"
 
-export async function getMembers({ userId, token }) {
+export async function getMembers({
+  userId,
+  token,
+}: {
+  userId: string
+  token: string
+}) {
   const supabase = await supabaseClient(token)
 
   // Fetch members with related rewards and chores
@@ -35,7 +41,7 @@ export async function getMembers({ userId, token }) {
   const processedMembers = members.map((member) => {
     return {
       ...member,
-      reward: member.reward.map((r) => ({
+      reward: member.reward.map((r: any) => ({
         id: r.reward.id,
         name: r.reward.name,
         count: r.count,
@@ -44,7 +50,7 @@ export async function getMembers({ userId, token }) {
         created_at: r.reward.created_at,
         description: r.reward.description,
       })),
-      chore: member.chore.map((c) => ({
+      chore: member.chore.map((c: any) => ({
         id: c.chore.id,
         name: c.chore.name,
         count: c.count,
@@ -60,7 +66,15 @@ export async function getMembers({ userId, token }) {
 }
 
 // add a member
-export const addMember = async ({ userId, token, newMember }) => {
+export const addMember = async ({
+  userId,
+  token,
+  newMember,
+}: {
+  userId: string
+  token: string
+  newMember: Partial<Member>
+}) => {
   const supabase = await supabaseClient(token)
   try {
     // Perform the insertion
@@ -71,20 +85,26 @@ export const addMember = async ({ userId, token, newMember }) => {
 
     // Check if there's an error
     if (error) {
-      console.error("Error adding member:", error.message)
+      console.error("Error adding member:", (error as unknown as Error).message)
       return null
     }
 
     // Return the inserted data
     return data
   } catch (error) {
-    console.error("Error adding member:", error.message)
+    console.error("Error adding member:", (error as Error).message)
     return null
   }
 }
 
 // update a member
-export const updateMember = async ({ token, memberEdited }) => {
+export const updateMember = async ({
+  token,
+  memberEdited,
+}: {
+  token: string
+  memberEdited: { id: string; name: string; role: string }
+}) => {
   const supabase = await supabaseClient(token)
   try {
     const { data, error } = await supabase
@@ -100,20 +120,29 @@ export const updateMember = async ({ token, memberEdited }) => {
 
     // Check if there's an error
     if (error) {
-      console.error("Error updating member:", error.message)
+      console.error(
+        "Error updating member:",
+        (error as unknown as Error).message
+      )
       return null
     }
 
     // Return the updated data
     return data
   } catch (error) {
-    console.error("Error updating member:", error.message)
+    console.error("Error updating member:", (error as Error).message)
     return null
   }
 }
 
 // Delete a Member
-export const deleteMember = async ({ token, memberToDelete }) => {
+export const deleteMember = async ({
+  token,
+  memberToDelete,
+}: {
+  token: string
+  memberToDelete: { id: string }
+}) => {
   const supabase = await supabaseClient(token)
   const response = await supabase
     .from("members")
@@ -170,7 +199,15 @@ export const deductPoints = async ({
 }
 
 // delete Related Chore
-export const deleteRelatedChore = async ({ token, memberId, choreId }) => {
+export const deleteRelatedChore = async ({
+  token,
+  memberId,
+  choreId,
+}: {
+  token: string
+  memberId: string
+  choreId: string
+}) => {
   const supabase = await supabaseClient(token)
 
   const { error } = await supabase
@@ -188,7 +225,15 @@ export const deleteRelatedChore = async ({ token, memberId, choreId }) => {
 }
 
 // delete Related Reward
-export const deleteRelatedReward = async ({ token, memberId, rewardId }) => {
+export const deleteRelatedReward = async ({
+  token,
+  memberId,
+  rewardId,
+}: {
+  token: string
+  memberId: string
+  rewardId: string
+}) => {
   const supabase = await supabaseClient(token)
 
   const { error } = await supabase
@@ -206,10 +251,18 @@ export const deleteRelatedReward = async ({ token, memberId, rewardId }) => {
 }
 
 // delete punishment ( points deducted)
-export const deletePunishment = async ({ token, member, punishmentIndex }) => {
+export const deletePunishment = async ({
+  token,
+  member,
+  punishmentIndex,
+}: {
+  token: string
+  member: Member
+  punishmentIndex: number
+}) => {
   const supabase = await supabaseClient(token)
 
-  const updatedDeductions = [...member.pointsDeducted]
+  const updatedDeductions = [...(member.pointsDeducted || [])]
   const pointsToAdd = updatedDeductions[punishmentIndex]?.points || 0
 
   updatedDeductions.splice(punishmentIndex, 1)

@@ -1,5 +1,20 @@
 import { supabaseClient } from "../supabaseClient"
 
+// Define the MemberReward type
+interface MemberReward {
+  member_id: string
+  reward_id: string
+  date: string[]
+  count: number
+}
+
+// Define the Member type
+interface Member {
+  id: string
+  name: string
+  points: number
+}
+
 export async function getRewards({
   userId,
   token,
@@ -34,9 +49,9 @@ export async function getRewards({
 
   // Merge member_reward data into members object
   rewards.forEach((reward) => {
-    reward.members = reward.members.map((member) => {
+    reward.members = reward.members.map((member: Member) => {
       const memberReward = reward.member_reward.find(
-        (mr) => mr.member_id === member.id
+        (mr: MemberReward) => mr.member_id === member.id
       )
       return memberReward
         ? { ...member, count: memberReward.count, date: memberReward.date }
@@ -50,7 +65,15 @@ export async function getRewards({
 }
 
 // add a reward
-export const addReward = async ({ userId, token, newReward }) => {
+export const addReward = async ({
+  userId,
+  token,
+  newReward,
+}: {
+  userId: string
+  token: string
+  newReward: Record<string, any>
+}) => {
   const supabase = await supabaseClient(token)
   try {
     // Perform the insertion
@@ -61,20 +84,44 @@ export const addReward = async ({ userId, token, newReward }) => {
 
     // Check if there's an error
     if (error) {
-      console.error("Error adding reward:", error.message)
+      if (error instanceof Error) {
+        console.error(
+          "Error adding reward:",
+          error instanceof Error ? error.message : error
+        )
+      } else {
+        console.error("Error adding reward:", error)
+      }
       return null
     }
 
     // Return the inserted data
     return data
   } catch (error) {
-    console.error("Error adding reward:", error.message)
+    if (error instanceof Error) {
+      console.error("Error adding reward:", error.message)
+    } else {
+      console.error("Error adding reward:", error)
+    }
     return null
   }
 }
 
 // update a reward
-export const updateReward = async ({ token, rewardEdited }) => {
+interface RewardEdited {
+  id: string
+  name: string
+  points: number
+  description: string
+}
+
+export const updateReward = async ({
+  token,
+  rewardEdited,
+}: {
+  token: string
+  rewardEdited: RewardEdited
+}) => {
   const supabase = await supabaseClient(token)
   try {
     const { data, error } = await supabase
@@ -90,20 +137,36 @@ export const updateReward = async ({ token, rewardEdited }) => {
 
     // Check if there's an error
     if (error) {
-      console.error("Error updating reward:", error.message)
+      if (error instanceof Error) {
+        console.error(
+          "Error updating reward:",
+          error instanceof Error ? error.message : error
+        )
+      } else {
+        console.error("Error updating reward:", error)
+      }
       return null
     }
 
     // Return the updated data
     return data
   } catch (error) {
-    console.error("Error updating reward:", error.message)
+    console.error(
+      "Error updating reward:",
+      error instanceof Error ? error.message : error
+    )
     return null
   }
 }
 
 // ! Delete a reward
-export const deleteReward = async ({ token, rewardToDelete }) => {
+export const deleteReward = async ({
+  token,
+  rewardToDelete,
+}: {
+  token: string
+  rewardToDelete: { id: string }
+}) => {
   const supabase = await supabaseClient(token)
   const response = await supabase
     .from("reward")
@@ -123,7 +186,15 @@ export const deleteReward = async ({ token, rewardToDelete }) => {
 // }
 
 // Redeem a reward
-export const redeemReward = async ({ token, reward, member }) => {
+export const redeemReward = async ({
+  token,
+  reward,
+  member,
+}: {
+  token: string
+  reward: { id: string; points: number } // Define the expected structure of reward
+  member: { id: string; points: number } // Define the expected structure of member
+}) => {
   const supabase = await supabaseClient(token)
   try {
     // Decrement member's points
@@ -215,7 +286,10 @@ export const redeemReward = async ({ token, reward, member }) => {
       return { memberData, memberRewardData }
     }
   } catch (error) {
-    console.error("Error redeeming reward:", error.message)
+    console.error(
+      "Error redeeming reward:",
+      error instanceof Error ? error.message : error
+    )
     return null
   }
 }

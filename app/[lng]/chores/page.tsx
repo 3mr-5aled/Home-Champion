@@ -33,7 +33,11 @@ export default function ChoresPage() {
   const [members, setMembers] = useState<Member[]>([])
   const [isEditOpen, setIsEditOpen] = useState(false)
   const [newChore, setNewChore] = useState({ name: "", points: 0 })
-  const [choreEdited, setChoreEdited] = useState({
+  const [choreEdited, setChoreEdited] = useState<{
+    id: number | null
+    name: string
+    points: number
+  }>({
     id: null,
     name: "",
     points: 0,
@@ -56,16 +60,18 @@ export default function ChoresPage() {
       const token = await getToken({ template: "supabase" })
       if (token) {
         const fetchedChores: Chore[] | null = await getChores({ userId, token })
-        const fetchedMembersChores: Member[] | null = await getMembersChores({
-          userId,
-          token,
-        })
+        const fetchedMembersChores: Member[] | null =
+          (await getMembersChores({
+            userId: userId || "",
+            token: token || "",
+          })) ?? null
         const fetchedRemovedChores: Chore[] | null = await getDeletedChore({
-          userId,
-          token,
+          userId: userId || "",
+          token: token || "",
         })
 
-        setChores(fetchedChores || [])
+        const fetchedChoresData = await getChores({ userId, token })
+        setChores(fetchedChoresData || [])
         setMembers(fetchedMembersChores || [])
         setRemovedChores(fetchedRemovedChores || [])
         setLoadingChores(false)
@@ -77,15 +83,35 @@ export default function ChoresPage() {
     fetchChores()
   }, [userId, getToken])
 
-  const handleAddChore = async (e) => {
+  interface NewChore {
+    name: string
+    points: number
+  }
+
+  interface AddChoreResponse {
+    id: number
+    name: string
+    points: number
+  }
+
+  const handleAddChore = async (
+    e: React.FormEvent<HTMLFormElement>
+  ): Promise<void> => {
     e.preventDefault()
     setAddingChore(true)
     const token = await getToken({ template: "supabase" })
 
     if (newChore.name && newChore.points) {
-      const addedChore = await addChore({ userId, token, newChore })
+      const addedChore: AddChoreResponse[] | null = await addChore({
+        userId: userId ?? "",
+        token: token ?? "",
+        newChore,
+      })
       if (addedChore) {
-        setChores([...chores, addedChore[0]])
+        setChores([
+          ...chores,
+          { ...addedChore[0], count: 0, date: [] } as Chore,
+        ])
         setNewChore({ name: "", points: 0 })
         toast.success("Chore added successfully.")
       } else {
@@ -95,21 +121,49 @@ export default function ChoresPage() {
     setAddingChore(false)
   }
 
-  const handleEditChore = async (e) => {
+  interface ChoreEdited {
+    id: number | null
+    name: string
+    points: number
+  }
+
+  interface UpdateChoreResponse {
+    success: boolean
+  }
+
+  const handleEditChore = async (
+    e: React.FormEvent<HTMLFormElement>
+  ): Promise<void> => {
     e.preventDefault()
     setEditingChore(true)
 
-    const token = await getToken({ template: "supabase" })
+    const token: string | null = await getToken({ template: "supabase" })
     if (!token) {
       toast.error("Failed to get the token.")
       return
     }
-    const result = await updateChore({ token, choreEdited })
+    const result: UpdateChoreResponse | null = await updateChore({
+      token,
+      choreEdited: {
+        ...choreEdited,
+        id: String(choreEdited.id),
+      },
+    }).then((response) => {
+      if (Array.isArray(response)) {
+        return { success: response.length > 0 }
+      }
+      return response
+    })
     if (!result) {
-      toast.error("Failed to edit chore.")
+      toast.error("Failed to e chore.")
       return
     }
-    const updatedChores = await getChores({ userId, token })
+    if (!userId) {
+      toast.error("User ID is missing.")
+      setEditingChore(false)
+      return
+    }
+    const updatedChores: Chore[] | null = await getChores({ userId, token })
     setChores(updatedChores || [])
     setChoreEdited({ id: null, name: "", points: 0 })
     setIsEditOpen(false)
@@ -187,7 +241,6 @@ export default function ChoresPage() {
     const success = await deleteChorePermanently({
       token,
       choreToDelete,
-      isRelatedToMember,
     })
     if (success) {
       setRemovedChores((prevRemovedChores) =>
@@ -231,7 +284,11 @@ export default function ChoresPage() {
   const handleClaimChore = async (chore: Chore, member: Member) => {
     try {
       const token = await getToken({ template: "supabase" })
-      const result = await claimChore({ token, chore, member })
+      const result = await claimChore({
+        token: token ?? "",
+        chore: { ...chore, id: String(chore.id) },
+        member: { ...member, id: String(member.id) },
+      })
 
       if (result) {
         const updatedMembers = members.map((m) =>
@@ -241,25 +298,26 @@ export default function ChoresPage() {
           r.id === chore.id
             ? {
                 ...r,
-                members: r.members.some((m) => m.id === member.id)
-                  ? r.members.map((m) =>
+                members: (r.members ?? []).some((m) => m.id === member.id)
+                  ? (r.members ?? []).map((m) =>
                       m.id === member.id
                         ? {
                             ...m,
-                            count: m.count + 1,
-                            date: [...m.date, new Date().toISOString()],
+                            count: (m.count ?? 0) + 1,
+                            date: [...(m.date || []), new Date().toISOString()],
                           }
                         : m
                     )
                   : [
-                      ...r.members,
+                      ...(r.members ?? []),
                       {
                         id: member.id,
                         name: member.name,
                         role: member.role,
+                        points: member.points, // Ensure 'points' is included
                         count: 1,
                         date: [new Date().toISOString()],
-                      },
+                      } as Member, // Explicitly cast to Member
                     ],
               }
             : r
@@ -272,7 +330,9 @@ export default function ChoresPage() {
         toast.error("Failed to claim chore.")
       }
     } catch (error) {
-      toast.error("Error handling claim chore:", error.message)
+      const errorMessage =
+        error instanceof Error ? error.message : "An unknown error occurred"
+      toast.error(`Error handling claim chore: ${errorMessage}`)
     }
   }
 
@@ -287,7 +347,9 @@ export default function ChoresPage() {
         />
         <ManageChoresDialog
           chores={chores}
-          setChoreEdited={setChoreEdited}
+          setChoreEdited={(chore) =>
+            setChoreEdited((prev) => ({ ...prev, ...chore }))
+          }
           setIsEditOpen={setIsEditOpen}
           handleDeleteChore={handleDeleteChore}
           deletingChoreId={deletingChoreId}
@@ -329,7 +391,9 @@ export default function ChoresPage() {
         setIsEditOpen={setIsEditOpen}
         choreEdited={choreEdited}
         setChoreEdited={setChoreEdited}
-        handleEditChore={handleEditChore}
+        handleEditChore={(e: React.FormEvent<HTMLFormElement>) =>
+          handleEditChore(e)
+        }
         loading={editingChore}
       />
     </div>

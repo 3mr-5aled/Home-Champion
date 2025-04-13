@@ -40,7 +40,11 @@ const ViewClaimedMembersDialog: React.FC<ViewClaimedMembersDialogProps> = ({
               key={member.id}
               className="collapse collapse-arrow join-item rounded-lg border-secondary border"
             >
-              <input type="checkbox" name="my-accordion-4" />
+              <input
+                type="checkbox"
+                name="my-accordion-4"
+                aria-label="Expand or collapse member details"
+              />
               <div className="collapse-title text-xl font-medium">
                 {member.name} -{" "}
                 <span className="text-yellow-400">{member.count}</span> times

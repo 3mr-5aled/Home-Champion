@@ -76,7 +76,11 @@ const ViewDetailsModal = ({
                   key={index}
                   className="collapse collapse-arrow bg-base-300"
                 >
-                  <input type="checkbox" name="my-accordion-2" />
+                  <input
+                    type="checkbox"
+                    name="my-accordion-2"
+                    aria-label="Toggle chore details"
+                  />
                   <div className="collapse-title text-xl font-medium">
                     <div className="font-semibold">
                       {chore.name}{" "}
@@ -123,7 +127,11 @@ const ViewDetailsModal = ({
                   key={index}
                   className="collapse collapse-arrow bg-base-300"
                 >
-                  <input type="checkbox" name="my-accordion-2" />
+                  <input
+                    type="checkbox"
+                    name="my-accordion-2"
+                    aria-label="Toggle reward details"
+                  />
                   <div className="collapse-title text-xl font-medium">
                     <div className="font-semibold">
                       {reward.name}{" "}
@@ -169,7 +177,11 @@ const ViewDetailsModal = ({
                     key={index}
                     className="collapse collapse-arrow bg-base-300"
                   >
-                    <input type="checkbox" name="my-accordion-2" />
+                    <input
+                      type="checkbox"
+                      name="my-accordion-2"
+                      aria-label="Toggle deduction details"
+                    />
                     <div className="collapse-title text-xl font-medium">
                       <div className="font-semibold">{deduction.reason}</div>
                     </div>

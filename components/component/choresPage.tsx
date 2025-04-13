@@ -27,7 +27,7 @@ import {
 import { useAuth } from "@clerk/nextjs"
 
 export default function ChoresPage() {
-  const [selectedChore, setSelectedChore] = useState<Chore>(null)
+  const [selectedChore, setSelectedChore] = useState<Chore | null>(null)
   const [chores, setChores] = useState<Chore[]>([]) // Ensure chores is always an array
   const [members, setMembers] = useState<Member[]>([])
   const [removedChore, setRemovedChore] = useState<Chore[]>([])
@@ -37,10 +37,12 @@ export default function ChoresPage() {
     name: "",
     points: 0,
   })
-  const [choreEdited, setChoreEdited] = useState({
+  const [choreEdited, setChoreEdited] = useState<Chore>({
     id: null,
     name: "",
     points: 0,
+    count: 0,
+    date: [],
   })
   const [loadingChores, setLoadingChores] = useState<boolean>(true)
 
@@ -56,10 +58,11 @@ export default function ChoresPage() {
           userId,
           token,
         })
-        const fetchedMembersChores: Member[] | null = await getMembersChores({
-          userId,
-          token,
-        })
+        const fetchedMembersChores: Member[] | null =
+          (await getMembersChores({
+            userId,
+            token,
+          })) || null
 
         setChores(fetchedChores || [])
         setMembers(fetchedMembersChores || [])
@@ -76,9 +79,24 @@ export default function ChoresPage() {
   }, [userId, getToken])
 
   // add a chore
-  const handleAddChore = async (e) => {
+  interface NewChore {
+    name: string
+    points: number
+  }
+
+  const handleAddChore = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     const token = await getToken({ template: "supabase" })
+
+    if (!userId) {
+      toast.error("User ID is missing.")
+      return
+    }
+
+    if (!token) {
+      toast.error("Failed to get the token.")
+      return
+    }
 
     if (newChore.name && newChore.points) {
       const addedChore = await addChore({ userId, token, newChore })
@@ -91,7 +109,13 @@ export default function ChoresPage() {
   }
 
   // edit chores
-  const handleEditChore = async (e) => {
+  interface EditedChore {
+    id: string | null
+    name: string
+    points: number
+  }
+
+  const handleEditChore = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
 
     const token = await getToken({ template: "supabase" })
@@ -99,18 +123,27 @@ export default function ChoresPage() {
       toast.error("Failed to get the token.")
       return
     }
-    const result = await updateChore({ token, choreEdited })
+    const result = await updateChore({
+      token,
+      choreEdited: { ...choreEdited, id: choreEdited.id?.toString() || "" },
+    })
     if (!result) {
       toast.error("Failed to edit chore.")
       return
     }
 
+    if (!userId) {
+      toast.error("User ID is missing.")
+      return
+    }
     const updatedChores = await getChores({ userId, token })
     setChores(updatedChores || [])
     setChoreEdited({
       id: null,
       name: "",
       points: 0,
+      count: 0,
+      date: [],
     })
     setIsEditOpen(false)
     toast.success("chore edited successfully!")
@@ -134,42 +167,65 @@ export default function ChoresPage() {
   }
 
   // claim a chore
-  const handleClaimChore = async (chore, member) => {
+  interface ClaimChoreParams {
+    token: string
+    chore: Chore
+    member: Member
+  }
+
+  interface MemberData {
+    id: string
+    points: number
+  }
+
+  interface ClaimChoreResult {
+    memberData: MemberData[]
+  }
+
+  const handleClaimChore = async (
+    chore: Chore,
+    member: Member
+  ): Promise<void> => {
     try {
       const token = await getToken({ template: "supabase" })
 
-      const result = await claimChore({ token, chore, member })
+      const result: ClaimChoreResult | null = await claimChore({
+        token: token ?? "",
+        chore: { ...chore, id: String(chore.id) },
+        member: { ...member, id: String(member.id) },
+      })
 
       if (result) {
         // Update members state
-        const updatedMembers = members.map((m) =>
+        const updatedMembers: Member[] = members.map((m) =>
           m.id === member.id ? { ...m, points: result.memberData[0].points } : m
         )
 
         // Update chores state
-        const updatedChores = chores.map((r) =>
+        const updatedChores: Chore[] = chores.map((r) =>
           r.id === chore.id
             ? {
                 ...r,
-                members: r.members.some((m) => m.id === member.id)
-                  ? r.members.map((m) =>
+                members: (r.members ?? []).some((m) => m.id === member.id)
+                  ? (r.members ?? []).map((m) =>
                       m.id === member.id
                         ? {
                             ...m,
-                            count: m.count + 1,
-                            date: [...m.date, new Date().toISOString()],
+                            count: (m.count ?? 0) + 1,
+                            date: [...(m.date || []), new Date().toISOString()],
                           }
                         : m
                     )
                   : [
-                      ...r.members,
+                      ...(r.members ?? []),
                       {
                         id: member.id,
                         name: member.name,
                         role: member.role,
+                        points: member.points, // Ensure points are included
                         count: 1,
                         date: [new Date().toISOString()],
-                      },
+                      } as Member, // Explicitly cast to Member
                     ],
               }
             : r
@@ -181,7 +237,7 @@ export default function ChoresPage() {
       } else {
         toast.error("Failed to claim chore.")
       }
-    } catch (error) {
+    } catch (error: any) {
       toast.error("Error handling claim chore:", error.message)
     }
   }
@@ -239,7 +295,10 @@ export default function ChoresPage() {
                     className="col-span-3"
                     value={newChore.points}
                     onChange={(e) =>
-                      setNewChore({ ...newChore, points: e.target.value })
+                      setNewChore({
+                        ...newChore,
+                        points: parseInt(e.target.value, 10) || 0,
+                      })
                     }
                   />
                 </div>
@@ -285,14 +344,16 @@ export default function ChoresPage() {
                             setChoreEdited(chore)
                             setIsEditOpen(true)
                           }}
+                          title="Edit chore"
                         >
                           <LuPencil />
-                        </button>
-                        <button
-                          className="btn btn-error text-white custom-btn"
-                          onClick={() => handleDeleteChore(chore)}
-                        >
-                          <LuTrash />
+                          <button
+                            className="btn btn-error text-white custom-btn"
+                            onClick={() => handleDeleteChore(chore)}
+                            title="Delete chore"
+                          >
+                            <LuTrash />
+                          </button>
                         </button>
                       </div>
                     </div>
@@ -334,8 +395,9 @@ export default function ChoresPage() {
                         </DialogDescription>
                       </DialogHeader>
                       <p className="text-yellow-300">
-                        member will claim {selectedChore?.points} points for "
-                        {selectedChore?.name}".
+                        member will claim {selectedChore?.points} points for
+                        &quot;
+                        {selectedChore?.name}&quot;.
                       </p>
                       <div className="mt-4 grid grid-cols-2 gap-4">
                         {members && members.length > 0 ? (
@@ -344,6 +406,7 @@ export default function ChoresPage() {
                               key={member.id}
                               className="btn btn-secondary custom-btn text-white flex flex-col items-center p-2"
                               onClick={() =>
+                                selectedChore &&
                                 handleClaimChore(selectedChore, member)
                               }
                             >
@@ -379,14 +442,18 @@ export default function ChoresPage() {
                               key={member.id}
                               className="collapse collapse-arrow join-item border-base-300 border"
                             >
-                              <input type="radio" name="my-accordion-4" />
+                              <input
+                                type="radio"
+                                name="my-accordion-4"
+                                title="Expand or collapse section"
+                              />
                               <div className="collapse-title text-xl font-medium">
                                 {member.name} - {member.count} times
                               </div>
                               <div className="collapse-content">
                                 <div className="m-4">
                                   <ol className="list-decimal">
-                                    {member.date.map((date) => {
+                                    {(member.date ?? []).map((date) => {
                                       {
                                         const formattedDate = new Date(
                                           date
@@ -460,7 +527,10 @@ export default function ChoresPage() {
                   className="col-span-3"
                   value={choreEdited.points}
                   onChange={(e) =>
-                    setChoreEdited({ ...choreEdited, points: e.target.value })
+                    setChoreEdited({
+                      ...choreEdited,
+                      points: parseInt(e.target.value, 10) || 0,
+                    })
                   }
                 />
               </div>

@@ -28,7 +28,7 @@ import {
   deleteRelatedChore,
   deleteRelatedReward,
   deletePunishment,
-} from "@/lib"
+} from "@/lib/requests/membersRequests"
 import { Member } from "@/common.types"
 import DataWrapper from "@/components/ui/DataWrapper"
 
@@ -63,15 +63,27 @@ export default function MembersPage() {
   const [isEditOpen, setIsEditOpen] = useState(false)
   const [isDeductOpen, setIsDeductOpen] = useState(false)
   const [isViewDetailsOpen, setIsViewDetailsOpen] = useState(false)
-  const [selectedMember, setSelectedMember] = useState(null)
+  const [selectedMember, setSelectedMember] = useState<Member | null>(null)
 
   const [newMember, setNewMember] = useState({
     name: "",
     role: "",
     points: 0,
     pointsDeducted: [],
+    chore: [], // Added chore property
+    reward: [], // Added reward property
   })
-  const [memberEdited, setMemberEdited] = useState({
+  const [memberEdited, setMemberEdited] = useState<{
+    name: string
+    role: string
+    points: number
+    chore: { id: string; name: string; count: number; date: string[] }[]
+    reward: { id: string; name: string; count: number; date: string[] }[]
+    pointsDeducted: {
+      reason: string
+      date: string
+    }[]
+  }>({
     name: "",
     role: "",
     points: 0,
@@ -93,7 +105,22 @@ export default function MembersPage() {
   }
 
   // add member handler
-  const handleAddMember = async (e) => {
+  interface NewMember {
+    name: string
+    role: string
+    points: number
+    chore: any[]
+    reward: any[]
+    pointsDeducted: any[]
+  }
+
+  interface AddMemberParams {
+    userId: string | null
+    token: string
+    newMember: NewMember
+  }
+
+  const handleAddMember = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
 
     try {
@@ -103,13 +130,24 @@ export default function MembersPage() {
         return
       }
 
+      if (!userId) {
+        toast.error("User ID is not available.")
+        return
+      }
+
       const result = await addMember({ userId, token, newMember })
       if (!result) {
         toast.error("Failed to add member.")
         return
       }
-
-      const updatedMembers = await getMembers({ userId, token })
+      if (!userId) {
+        toast.error("User ID is not available.")
+        return
+      }
+      const updatedMembers = await getMembers({
+        userId: userId as string,
+        token,
+      })
       setMembers(updatedMembers || [])
       setNewMember({
         name: "",
@@ -135,20 +173,40 @@ export default function MembersPage() {
       return
     }
 
-    const result = await deleteMember({ token, memberToDelete })
+    const result = await deleteMember({
+      token,
+      memberToDelete: { id: memberToDelete.id.toString() },
+    })
     if (!result) {
       toast.error("Failed to add member.")
       return
     }
 
-    const updatedMembers = await getMembers({ userId, token })
+    if (!userId) {
+      toast.error("User ID is not available.")
+      return
+    }
+
+    const updatedMembers = await getMembers({ userId: userId as string, token })
     setMembers(updatedMembers || [])
     // setMembers(members.filter((member) => member.name !== memberToDelete.name))
     toast.success("Member deleted successfully!")
   }
 
   // edit member handler
-  const handleEditMember = async (e) => {
+  interface EditMemberParams {
+    token: string
+    memberEdited: {
+      name: string
+      role: string
+      points: number
+      chore: any[]
+      reward: any[]
+      pointsDeducted: any[]
+    }
+  }
+
+  const handleEditMember = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
 
     const token = await getToken({ template: "supabase" })
@@ -157,13 +215,19 @@ export default function MembersPage() {
       return
     }
 
-    const result = await updateMember({ token, memberEdited })
+    const result = await updateMember({
+      token,
+      memberEdited: {
+        ...memberEdited,
+        id: selectedMember?.id ? String(selectedMember.id) : "",
+      },
+    })
     if (!result) {
       toast.error("Failed to edit member.")
       return
     }
 
-    const updatedMembers = await getMembers({ userId, token })
+    const updatedMembers = await getMembers({ userId: userId ?? "", token })
     setMembers(updatedMembers || [])
     setMemberEdited({
       name: "",
@@ -178,11 +242,23 @@ export default function MembersPage() {
     toast.success("Member edited successfully!")
   }
 
-  const handleDeductPoints = async (e) => {
+  interface DeductPointsParams {
+    token: string
+    memberData: Member | null
+    pointsToDeduct: number
+    reason: string
+  }
+
+  const handleDeductPoints = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     const token = await getToken({ template: "supabase" })
     if (!token) {
       toast.error("Failed to get the token.")
+      return
+    }
+
+    if (!selectedMember) {
+      toast.error("No member selected.")
       return
     }
 
@@ -194,7 +270,7 @@ export default function MembersPage() {
     })
 
     if (updatedMember) {
-      const updatedMembers = await getMembers({ userId, token })
+      const updatedMembers = await getMembers({ userId: userId ?? "", token })
       setMembers(updatedMembers || [])
       setDeductReason("")
       setDeductedPoints(0)
@@ -265,11 +341,33 @@ export default function MembersPage() {
   //   }
   //   toast.success("Deduction deleted successfully!")
   // }
-  const updateSelectedMember = (members, memberId) => {
-    const updatedMember = members.find((m) => m.id === memberId)
-    setSelectedMember(updatedMember)
+  interface UpdateSelectedMemberParams {
+    members: Member[]
+    memberId: string
   }
-  const handleDeleteChore = async (member, choreIndex) => {
+
+  const updateSelectedMember = (
+    members: UpdateSelectedMemberParams["members"],
+    memberId: UpdateSelectedMemberParams["memberId"]
+  ) => {
+    const updatedMember = members.find((m) => m.id === Number(memberId))
+    setSelectedMember(updatedMember || null)
+  }
+  interface DeleteChoreParams {
+    token: string
+    memberId: string
+    choreId: string
+  }
+
+  interface MemberWithChores {
+    id: string
+    chore: { id: string }[]
+  }
+
+  const handleDeleteChore = async (
+    member: MemberWithChores,
+    choreIndex: number
+  ) => {
     const token = await getToken({ template: "supabase" })
     if (!token) {
       toast.error("Failed to get the token.")
@@ -284,16 +382,30 @@ export default function MembersPage() {
     })
 
     if (result) {
-      const updatedMembers = await getMembers({ userId, token })
+      const updatedMembers = await getMembers({ userId: userId ?? "", token })
       setMembers(updatedMembers || [])
-      updateSelectedMember(updatedMembers, member.id)
+      updateSelectedMember(updatedMembers, String(member.id))
       toast.success("Chore deleted successfully!")
     } else {
       toast.error("Failed to delete chore.")
     }
   }
 
-  const handleDeleteReward = async (member, rewardIndex) => {
+  interface DeleteRewardParams {
+    token: string
+    memberId: string
+    rewardId: string
+  }
+
+  interface MemberWithRewards {
+    id: string
+    reward: { id: string }[]
+  }
+
+  const handleDeleteReward = async (
+    member: MemberWithRewards,
+    rewardIndex: number
+  ) => {
     const token = await getToken({ template: "supabase" })
     if (!token) {
       toast.error("Failed to get the token.")
@@ -308,16 +420,25 @@ export default function MembersPage() {
     })
 
     if (result) {
-      const updatedMembers = await getMembers({ userId, token })
+      const updatedMembers = await getMembers({ userId: userId ?? "", token })
       setMembers(updatedMembers || [])
-      updateSelectedMember(updatedMembers, member.id)
+      updateSelectedMember(updatedMembers, String(member.id))
       toast.success("Reward deleted successfully!")
     } else {
       toast.error("Failed to delete reward.")
     }
   }
 
-  const handleDeleteDeduction = async (member, deductionIndex) => {
+  interface DeletePunishmentParams {
+    token: string
+    member: Member
+    punishmentIndex: number
+  }
+
+  const handleDeleteDeduction = async (
+    member: Member,
+    deductionIndex: number
+  ) => {
     const token = await getToken({ template: "supabase" })
     if (!token) {
       toast.error("Failed to get the token.")
@@ -328,12 +449,12 @@ export default function MembersPage() {
       token,
       member,
       punishmentIndex: deductionIndex,
-    })
+    } as DeletePunishmentParams)
 
     if (result) {
-      const updatedMembers = await getMembers({ userId, token })
+      const updatedMembers = await getMembers({ userId: userId ?? "", token })
       setMembers(updatedMembers || [])
-      updateSelectedMember(updatedMembers, member.id)
+      updateSelectedMember(updatedMembers, String(member.id))
       toast.success("Deduction deleted successfully!")
     } else {
       toast.error("Failed to delete deduction.")
@@ -364,6 +485,7 @@ export default function MembersPage() {
           <button
             className="btn btn-secondary custom-btn ml-2"
             onClick={() => setIsManageOpen(true)}
+            title="Manage Members"
           >
             Manage Members
           </button>
@@ -442,7 +564,7 @@ export default function MembersPage() {
             <DialogHeader>
               <DialogTitle>Add New Member</DialogTitle>
               <DialogDescription>
-                Fill out the member's information below.
+                Fill out the member&#39;s information below.
               </DialogDescription>
             </DialogHeader>
             <div className="grid gap-4 py-4">
@@ -466,6 +588,7 @@ export default function MembersPage() {
                 </Label>
                 {/* @ts-ignore */}
                 <select
+                  id="relationship-select"
                   className=" col-span-3 select select-bordered w-full max-w-xs"
                   value={newMember.role}
                   defaultValue="RelationShip"
@@ -524,17 +647,34 @@ export default function MembersPage() {
                       <button
                         className="btn btn-secondary btn-sm"
                         onClick={() => {
-                          setMemberEdited(member)
+                          setMemberEdited({
+                            name: member.name,
+                            role: member.role || "",
+                            points: member.points,
+                            chore:
+                              member.chore?.map((chore) => ({
+                                ...chore,
+                                id: chore.id?.toString() || "",
+                              })) || [],
+                            reward:
+                              member.reward?.map((reward) => ({
+                                ...reward,
+                                id: reward.id.toString(),
+                              })) || [],
+                            pointsDeducted: member.pointsDeducted || [],
+                          })
                           setIsEditOpen(true)
                         }}
+                        title="Edit Member"
                       >
-                        <LuPencil />
+                        <LuPencil aria-label="Edit Member" />
                       </button>
                       <button
                         className="btn btn-error btn-sm"
                         onClick={() => handleDeleteMember(member)}
+                        title="Delete Member"
                       >
-                        <LuTrash />
+                        <LuTrash aria-label="Delete Member" />
                       </button>
                     </div>
                   </div>
@@ -551,7 +691,7 @@ export default function MembersPage() {
             <DialogHeader>
               <DialogTitle>Edit Member</DialogTitle>
               <DialogDescription>
-                Update the member's information below.
+                Update the member&#39;s information below.
               </DialogDescription>
             </DialogHeader>
             <div className="grid gap-4 py-4">
@@ -650,7 +790,7 @@ export default function MembersPage() {
       <Dialog open={isViewDetailsOpen} onOpenChange={setIsViewDetailsOpen}>
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
-            <DialogTitle>{selectedMember?.name}'s Details</DialogTitle>
+            <DialogTitle>{selectedMember?.name}&#39;s Details</DialogTitle>
             <DialogDescription>
               View and manage completed chores, earned rewards, and deducted
               points.
@@ -658,13 +798,23 @@ export default function MembersPage() {
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <h3 className="font-semibold text-lg">Completed Chores</h3>
-            {selectedMember?.chore.length > 0 ? (
-              selectedMember.chore.map((chore, index) => (
+            {selectedMember?.chore && selectedMember.chore.length > 0 ? (
+              selectedMember?.chore?.map((chore, index) => (
                 <div
                   key={index}
                   className="collapse collapse-arrow bg-base-300"
                 >
-                  <input type="checkbox" name="my-accordion-2" />
+                  <label>
+                    <input
+                      type="checkbox"
+                      name="my-accordion-2"
+                      id="accordion-toggle"
+                    />
+                    <label htmlFor="accordion-toggle" className="sr-only">
+                      Toggle Accordion
+                    </label>
+                    Toggle Details
+                  </label>
                   <div className="collapse-title text-xl font-medium">
                     <div className="font-semibold">
                       {chore.name}{" "}
@@ -681,7 +831,24 @@ export default function MembersPage() {
                     </ol>
                     <button
                       className="btn btn-error btn-sm"
-                      onClick={() => handleDeleteChore(selectedMember, index)}
+                      onClick={() =>
+                        selectedMember &&
+                        handleDeleteChore(
+                          {
+                            ...selectedMember,
+                            id: selectedMember.id.toString(),
+                            chore:
+                              selectedMember.chore?.map((chore) => ({
+                                id: chore.id ? chore.id.toString() : "",
+                                name: chore.name,
+                                count: chore.count,
+                                date: chore.date,
+                              })) ?? [],
+                          },
+                          index
+                        )
+                      }
+                      title="Delete Chore"
                     >
                       Delete chore
                       <LuTrash />
@@ -696,13 +863,22 @@ export default function MembersPage() {
             )}
 
             <h3 className="font-semibold text-lg">Earned Rewards</h3>
-            {selectedMember?.reward.length > 0 ? (
-              selectedMember.reward.map((reward, index) => (
+            {selectedMember?.reward?.length ?? 0 > 0 ? (
+              selectedMember?.reward?.map((reward, index) => (
                 <div
                   key={index}
                   className="collapse collapse-arrow bg-base-300"
                 >
-                  <input type="checkbox" name="my-accordion-2" />
+                  <label>
+                    <input
+                      type="checkbox"
+                      name="my-accordion-2"
+                      id="accordion-toggle"
+                    />
+                    <label htmlFor="accordion-toggle" className="sr-only">
+                      Toggle Accordion
+                    </label>
+                  </label>
                   <div className="collapse-title text-xl font-medium">
                     <div className="font-semibold">
                       {reward.name}{" "}
@@ -719,7 +895,20 @@ export default function MembersPage() {
                     </ol>
                     <button
                       className="btn btn-error btn-sm"
-                      onClick={() => handleDeleteReward(selectedMember, index)}
+                      onClick={() =>
+                        selectedMember &&
+                        handleDeleteReward(
+                          {
+                            ...selectedMember,
+                            id: selectedMember.id.toString(),
+                            reward:
+                              selectedMember.reward?.map((r) => ({
+                                id: r.id.toString(),
+                              })) || [],
+                          },
+                          index
+                        )
+                      }
                     >
                       Delete reward
                       <LuTrash />
@@ -734,13 +923,20 @@ export default function MembersPage() {
             )}
 
             <h3 className="font-semibold text-lg">Points Deductions</h3>
-            {selectedMember?.pointsDeducted.length > 0 ? (
-              selectedMember.pointsDeducted.map((deduction, index) => (
+            {selectedMember?.pointsDeducted?.length ? (
+              selectedMember?.pointsDeducted?.map((deduction, index) => (
                 <div
                   key={index}
                   className="collapse collapse-arrow bg-base-300"
                 >
-                  <input type="checkbox" name="my-accordion-2" />
+                  <input
+                    type="checkbox"
+                    id="accordion-toggle"
+                    name="my-accordion-2"
+                  />
+                  <label htmlFor="accordion-toggle" className="sr-only">
+                    Toggle Accordion
+                  </label>
                   <div className="collapse-title text-xl font-medium">
                     <div className="font-semibold">{deduction.reason}</div>
                   </div>
@@ -749,6 +945,7 @@ export default function MembersPage() {
                     <button
                       className="btn btn-error btn-sm"
                       onClick={() =>
+                        selectedMember &&
                         handleDeleteDeduction(selectedMember, index)
                       }
                     >

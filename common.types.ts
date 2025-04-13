@@ -17,7 +17,7 @@ export type Member = {
 }
 
 export type Chore = {
-  id: number
+  id: number | null
   name: string
   count: number
   date: string[]

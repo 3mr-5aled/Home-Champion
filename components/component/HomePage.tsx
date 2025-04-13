@@ -504,7 +504,7 @@ export default function HomePage({ appName }: { appName: string }) {
               <CardHeader>
                 <CardTitle>Progress</CardTitle>
                 <CardDescription>
-                  Track your children's progress.
+                  Track your children&#39;s progress.
                 </CardDescription>
               </CardHeader>
               <CardContent>

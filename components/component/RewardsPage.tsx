@@ -37,7 +37,12 @@ export default function RewardsPage() {
     points: 0,
     description: "",
   })
-  const [rewardEdited, setRewardEdited] = useState({
+  const [rewardEdited, setRewardEdited] = useState<{
+    id: number | null
+    name: string
+    points: number
+    description: string
+  }>({
     id: null,
     name: "",
     points: 0,
@@ -57,10 +62,11 @@ export default function RewardsPage() {
           userId,
           token,
         })
-        const fetchedMembersRewards: Member[] | null = await getMembersRewards({
-          userId,
-          token,
-        })
+        const fetchedMembersRewards: Member[] | null =
+          (await getMembersRewards({
+            userId,
+            token,
+          })) ?? null
         setMembers(fetchedMembersRewards || []) // Ensure fetchedMembersRewards is always an array
         setRewards(fetchedRewards || []) // Ensure fetchedRewards is always an array
         setLoadingRewards(false)
@@ -73,12 +79,26 @@ export default function RewardsPage() {
   }, [userId, getToken])
 
   // add a reward
-  const handleAddReward = async (e) => {
+  interface NewReward {
+    name: string
+    points: number
+    description: string
+  }
+
+  const handleAddReward = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     const token = await getToken({ template: "supabase" })
 
     if (newReward.name && newReward.points && newReward.description) {
-      const addedReward = await addReward({ userId, token, newReward })
+      if (!userId) {
+        toast.error("User ID is missing.")
+        return
+      }
+      const addedReward = await addReward({
+        userId,
+        token: token ?? "",
+        newReward,
+      })
       if (addedReward) {
         setRewards([...rewards, addedReward[0]])
         setNewReward({ name: "", points: 0, description: "" })
@@ -88,7 +108,16 @@ export default function RewardsPage() {
   }
 
   // edit rewards
-  const handleEditReward = async (e) => {
+  interface RewardEdited {
+    id: number | null
+    name: string
+    points: number
+    description: string
+  }
+
+  interface EditRewardEvent extends React.FormEvent<HTMLFormElement> {}
+
+  const handleEditReward = async (e: EditRewardEvent) => {
     e.preventDefault()
 
     const token = await getToken({ template: "supabase" })
@@ -96,12 +125,22 @@ export default function RewardsPage() {
       toast.error("Failed to get the token.")
       return
     }
-    const result = await updateReward({ token, rewardEdited })
+    const result = await updateReward({
+      token,
+      rewardEdited: {
+        ...rewardEdited,
+        id: rewardEdited.id !== null ? String(rewardEdited.id) : "",
+      },
+    })
     if (!result) {
       toast.error("Failed to edit reward.")
       return
     }
 
+    if (!userId) {
+      toast.error("User ID is missing.")
+      return
+    }
     const updatedRewards = await getRewards({ userId, token })
     setRewards(updatedRewards || [])
     setRewardEdited({
@@ -122,7 +161,10 @@ export default function RewardsPage() {
       return
     }
 
-    const response = await deleteReward({ token, rewardToDelete })
+    const response = await deleteReward({
+      token,
+      rewardToDelete: { id: String(rewardToDelete.id) },
+    })
     if (response) {
       setRewards((prevRewards) =>
         prevRewards.filter((reward) => reward.id !== rewardToDelete.id)
@@ -133,43 +175,76 @@ export default function RewardsPage() {
 
   // ! redeem a reward
   // redeem a reward
-  const handleRedeemReward = async (reward, member) => {
+  interface RedeemRewardParams {
+    token: string
+    reward: Reward
+    member: Member
+  }
+
+  interface UpdatedMember extends Member {
+    points: number
+  }
+
+  interface UpdatedReward extends Reward {
+    members: (Member & {
+      count: number
+      date: string[]
+    })[]
+  }
+
+  const handleRedeemReward = async (
+    reward: Reward,
+    member: Member
+  ): Promise<void> => {
     try {
       const token = await getToken({ template: "supabase" })
 
-      const result = await redeemReward({ token, reward, member })
+      const result: { memberData: UpdatedMember[] } | null = await redeemReward(
+        {
+          token: token ?? "",
+          reward: {
+            id: String(reward.id),
+            points: reward.points,
+          },
+          member: {
+            id: String(member.id),
+            points: member.points,
+          },
+        }
+      )
 
       if (result) {
         // Update members state
-        const updatedMembers = members.map((m) =>
+        const updatedMembers: Member[] = members.map((m) =>
           m.id === member.id ? { ...m, points: result.memberData[0].points } : m
         )
 
         // Update rewards state
-        const updatedRewards = rewards.map((r) =>
+        const updatedRewards: Reward[] = rewards.map((r) =>
           r.id === reward.id
             ? {
                 ...r,
-                members: r.members.some((m) => m.id === member.id)
-                  ? r.members.map((m) =>
+                members: (r.members ?? []).some((m) => m.id === member.id)
+                  ? ((r.members ?? []).map((m) =>
                       m.id === member.id
                         ? {
                             ...m,
-                            count: m.count + 1,
-                            date: [...m.date, new Date().toISOString()],
+                            count: (m.count ?? 0) + 1,
+                            date: [...(m.date || []), new Date().toISOString()],
                           }
                         : m
-                    )
-                  : [
-                      ...r.members,
+                    ) as Member[]) // Ensure all members conform to Member type
+                  : ([
+                      ...(r.members ?? []),
                       {
                         id: member.id,
                         name: member.name,
                         role: member.role,
+                        points: member.points, // Add missing 'points' property
                         count: 1,
                         date: [new Date().toISOString()],
                       },
-                    ],
+                    ] as Member[]), // Ensure all members conform to Member type
               }
             : r
         )
@@ -181,7 +256,11 @@ export default function RewardsPage() {
         toast.error("Failed to redeem reward.")
       }
     } catch (error) {
-      toast.error("Error handling redeem reward:", error.message)
+      if (error instanceof Error) {
+        toast.error(`Error handling redeem reward: ${error.message}`)
+      } else {
+        toast.error("An unknown error occurred while redeeming the reward.")
+      }
     }
   }
 
@@ -238,7 +317,10 @@ export default function RewardsPage() {
                     className="col-span-3"
                     value={newReward.points}
                     onChange={(e) =>
-                      setNewReward({ ...newReward, points: e.target.value })
+                      setNewReward({
+                        ...newReward,
+                        points: parseInt(e.target.value, 10) || 0,
+                      })
                     }
                   />
                 </div>
@@ -417,7 +499,7 @@ export default function RewardsPage() {
                                 </DialogHeader>
                                 <div className="m-4">
                                   <ol className="list-decimal">
-                                    {member.date.map((date) => {
+                                    {(member.date ?? []).map((date) => {
                                       {
                                         const formattedDate = new Date(
                                           date
@@ -437,7 +519,7 @@ export default function RewardsPage() {
                                 </div>
                               </DialogContent>
                             </Dialog>
-                            {member.count > 1 && (
+                            {(member.count ?? 0) > 1 && (
                               <span className="absolute top-0 -right-1 bg-red-500 text-white rounded-full w-5 h-5 text-xs flex items-center justify-center">
                                 {member.count}
                               </span>
@@ -496,7 +578,10 @@ export default function RewardsPage() {
                   className="col-span-3"
                   value={rewardEdited.points}
                   onChange={(e) =>
-                    setRewardEdited({ ...rewardEdited, points: e.target.value })
+                    setRewardEdited({
+                      ...rewardEdited,
+                      points: parseInt(e.target.value, 10) || 0,
+                    })
                   }
                 />
               </div>
