@@ -66,17 +66,13 @@ export default function HomePage({ appName }: { appName: string }) {
   // Calculate some statistics
   const totalMembers = members.length
   const totalChores = chores.length
-  const completedChores = chores.filter(
-    (chore) =>
-      chore.members && chore.members.some((member) => (member.count || 0) > 0)
-  ).length
+  const completedChores = chores.filter((chore) => chore.count > 0).length
   const totalRewards = rewards.length
-  const highestScore =
-    members.length > 0 ? Math.max(...members.map((member) => member.points)) : 0
-  const topPerformers = members.filter(
-    (member) => member.points === highestScore && members.length > 0
+  const topPerformer = members.reduce(
+    (top, member) => (member.points > (top?.points || 0) ? member : top),
+    null as Member | null
   )
-  const availableChores = chores.length // All chores are always available to be claimed
+  const availableChores = chores.filter((chore) => chore.count === 0).length
   const totalPointsEarned = members.reduce(
     (sum, member) => sum + member.points,
     0
@@ -158,172 +154,6 @@ export default function HomePage({ appName }: { appName: string }) {
           </div>
 
           <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-3">
-            {/* Analytics Section */}
-            <Card className="lg:col-span-3">
-              <CardHeader>
-                <CardTitle>Family Analytics</CardTitle>
-                <CardDescription>
-                  Overview of family activity and progress.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-                  {/* Points Distribution Chart */}
-                  <div className="space-y-2">
-                    <h4 className="font-medium">Points Distribution</h4>
-                    <div className="space-y-2">
-                      {members.map((member) => {
-                        const percentage =
-                          totalPointsEarned > 0
-                            ? (member.points / totalPointsEarned) * 100
-                            : 0
-                        return (
-                          <div key={member.id} className="space-y-1">
-                            <div className="flex justify-between text-sm">
-                              <span>{member.name}</span>
-                              <span>{member.points} pts</span>
-                            </div>
-                            <Progress value={percentage} className="h-2" />
-                          </div>
-                        )
-                      })}
-                    </div>
-                  </div>
-
-                  {/* Activity Summary */}
-                  <div className="space-y-2">
-                    <h4 className="font-medium">Activity Summary</h4>
-                    <div className="space-y-1 text-sm">
-                      <div className="flex justify-between">
-                        <span>Chores Completed:</span>
-                        <span className="font-medium">
-                          {members.reduce(
-                            (sum, member) =>
-                              sum +
-                              (member.chore?.reduce(
-                                (choreSum, chore) =>
-                                  choreSum + (chore.count || 0),
-                                0
-                              ) || 0),
-                            0
-                          )}
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>Rewards Redeemed:</span>
-                        <span className="font-medium">
-                          {members.reduce(
-                            (sum, member) =>
-                              sum +
-                              (member.reward?.reduce(
-                                (rewardSum, reward) =>
-                                  rewardSum + (reward.count || 0),
-                                0
-                              ) || 0),
-                            0
-                          )}
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>Points Deducted:</span>
-                        <span className="font-medium text-red-500">
-                          -
-                          {members.reduce(
-                            (sum, member) =>
-                              sum +
-                              (member.pointsDeducted?.reduce(
-                                (deductSum, deduct) =>
-                                  deductSum + (deduct.points || 0),
-                                0
-                              ) || 0),
-                            0
-                          )}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Top Chores */}
-                  <div className="space-y-2">
-                    <h4 className="font-medium">Most Popular Chores</h4>
-                    <div className="space-y-1 text-sm">
-                      {chores
-                        .filter(
-                          (chore) => chore.members && chore.members.length > 0
-                        )
-                        .sort((a, b) => {
-                          const aCount =
-                            a.members?.reduce(
-                              (sum, member) => sum + (member.count || 0),
-                              0
-                            ) || 0
-                          const bCount =
-                            b.members?.reduce(
-                              (sum, member) => sum + (member.count || 0),
-                              0
-                            ) || 0
-                          return bCount - aCount
-                        })
-                        .slice(0, 3)
-                        .map((chore) => {
-                          const completionCount =
-                            chore.members?.reduce(
-                              (sum, member) => sum + (member.count || 0),
-                              0
-                            ) || 0
-                          return (
-                            <div
-                              key={chore.id}
-                              className="flex justify-between"
-                            >
-                              <span>{chore.name}</span>
-                              <span className="font-medium">
-                                {completionCount}x
-                              </span>
-                            </div>
-                          )
-                        })}
-                    </div>
-                  </div>
-
-                  {/* Member Rankings */}
-                  <div className="space-y-2">
-                    <h4 className="font-medium">Member Rankings</h4>
-                    <div className="space-y-1 text-sm">
-                      {members
-                        .sort((a, b) => b.points - a.points)
-                        .map((member, index) => (
-                          <div
-                            key={member.id}
-                            className="flex items-center justify-between"
-                          >
-                            <div className="flex items-center gap-2">
-                              <span
-                                className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
-                                  index === 0
-                                    ? "bg-yellow-500 text-white"
-                                    : index === 1
-                                    ? "bg-gray-400 text-white"
-                                    : index === 2
-                                    ? "bg-amber-600 text-white"
-                                    : "bg-gray-200 text-gray-600"
-                                }`}
-                              >
-                                {index + 1}
-                              </span>
-                              <span>{member.name}</span>
-                            </div>
-                            <span className="font-medium">
-                              {member.points} pts
-                            </span>
-                          </div>
-                        ))}
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
             {/* Family Members */}
             <Card>
               <CardHeader>
@@ -372,9 +202,7 @@ export default function HomePage({ appName }: { appName: string }) {
                               </p>
                             </div>
                           </div>
-                          {topPerformers.some(
-                            (performer) => performer.id === member.id
-                          ) && (
+                          {topPerformer?.id === member.id && (
                             <Badge variant="secondary">
                               <LuTrophy className="h-3 w-3 mr-1" />
                               Top Performer
@@ -413,26 +241,23 @@ export default function HomePage({ appName }: { appName: string }) {
                       <LuExternalLink className="h-4 w-4" />
                     </Link>
                   </div>
-                  <CardTitle>Available Chores</CardTitle>
+                  <CardTitle>Active Chores</CardTitle>
                   <CardDescription>
-                    Chores that can be completed for points.
+                    Available chores to complete.
                   </CardDescription>
                 </div>
               </CardHeader>
               <CardContent>
                 <DataWrapper
-                  data={chores}
-                  noDataMessage="No chores available. Create some chores to get started!"
+                  data={chores.filter((chore) => chore.count === 0)}
+                  noDataMessage="No active chores available. All chores have been completed!"
                 >
                   {() => (
                     <div className="grid gap-4">
-                      {chores.slice(0, 3).map((chore) => {
-                        const timesCompleted =
-                          chore.members?.reduce(
-                            (total, member) => total + (member.count || 0),
-                            0
-                          ) || 0
-                        return (
+                      {chores
+                        .filter((chore) => chore.count === 0)
+                        .slice(0, 3)
+                        .map((chore) => (
                           <div
                             key={chore.id}
                             className="flex items-center justify-between p-3 border rounded-lg"
@@ -440,22 +265,24 @@ export default function HomePage({ appName }: { appName: string }) {
                             <div className="flex-1">
                               <h4 className="font-medium">{chore.name}</h4>
                               <p className="text-sm text-muted-foreground">
-                                {chore.points} points • Completed{" "}
-                                {timesCompleted} times
+                                {chore.points} points
                               </p>
                             </div>
                             <div className="flex items-center gap-2">
                               <LuClock className="h-4 w-4 text-muted-foreground" />
-                              <span className="text-sm text-primary font-medium">
+                              <span className="text-sm text-muted-foreground">
                                 Available
                               </span>
                             </div>
                           </div>
-                        )
-                      })}
-                      {chores.length > 3 && (
+                        ))}
+                      {chores.filter((chore) => chore.count === 0).length >
+                        3 && (
                         <p className="text-sm text-muted-foreground text-center">
-                          +{chores.length - 3} more chores
+                          +
+                          {chores.filter((chore) => chore.count === 0).length -
+                            3}{" "}
+                          more chores
                         </p>
                       )}
                     </div>
@@ -531,6 +358,57 @@ export default function HomePage({ appName }: { appName: string }) {
               </CardFooter>
             </Card>
           </div>
+
+          {/* Progress Overview */}
+          {members.length > 0 && (
+            <Card className="mt-8">
+              <CardHeader>
+                <CardTitle>Family Progress</CardTitle>
+                <CardDescription>
+                  See how everyone is doing with their chores and points.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-6">
+                  {members.map((member) => {
+                    const memberCompletedChores = chores.filter((chore) =>
+                      chore.members?.some((m) => m.name === member.name)
+                    ).length
+                    const progress =
+                      totalChores > 0
+                        ? (memberCompletedChores / totalChores) * 100
+                        : 0
+
+                    return (
+                      <div key={member.id} className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <Avatar className="h-8 w-8">
+                              <AvatarFallback>
+                                {member.name
+                                  .split(" ")
+                                  .map((n) => n[0])
+                                  .join("")
+                                  .toUpperCase()}
+                              </AvatarFallback>
+                            </Avatar>
+                            <span className="font-medium">{member.name}</span>
+                          </div>
+                          <div className="flex items-center gap-4">
+                            <span className="text-sm text-muted-foreground">
+                              {memberCompletedChores}/{totalChores} chores
+                            </span>
+                            <Badge variant="outline">{member.points} pts</Badge>
+                          </div>
+                        </div>
+                        <Progress value={progress} className="h-2" />
+                      </div>
+                    )
+                  })}
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </section>
       </main>
     </div>

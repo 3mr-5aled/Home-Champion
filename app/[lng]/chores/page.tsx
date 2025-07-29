@@ -8,12 +8,10 @@ import {
   addChore,
   updateChore,
   deleteChore,
-  getMembersChores,
+  hardDeleteChore,
   claimChore,
-  getDeletedChore,
-  deleteChorePermanently,
-  checkChoreRelation,
 } from "@/lib/requests"
+import { getMembers } from "@/lib/requests/membersRequests"
 import { useAuth } from "@clerk/nextjs"
 
 import Header from "@/components/ui/Header"
@@ -23,8 +21,8 @@ import {
   ChoreCard,
   EditChoreDialog,
   TrashChoresDialog,
-  ConfirmationDialog,
 } from "@/components/pages/chores"
+import DeleteConfirmationDialog from "@/components/pages/common/DeleteConfirmationDialog"
 
 export default function ChoresPage() {
   const [selectedChore, setSelectedChore] = useState<Chore | null>(null)
@@ -46,11 +44,11 @@ export default function ChoresPage() {
   const [addingChore, setAddingChore] = useState<boolean>(false)
   const [editingChore, setEditingChore] = useState<boolean>(false)
   const [deletingChoreId, setDeletingChoreId] = useState<number | null>(null)
-  const [isConfirmOpen, setIsConfirmOpen] = useState<boolean>(false)
-  const [isRelatedToMember, setIsRelatedToMember] = useState<boolean>(false)
+  const [claimingChore, setClaimingChore] = useState<boolean>(false)
+  const [claimingMemberId, setClaimingMemberId] = useState<number | null>(null)
+  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState<boolean>(false)
+  const [deletingChore, setDeletingChore] = useState<boolean>(false)
   const [choreToDelete, setChoreToDelete] = useState<Chore | null>(null)
-  const [choreToConfirm, setChoreToConfirm] = useState<Chore | null>(null)
-  const [confirmationMessage, setConfirmationMessage] = useState("")
 
   const { userId, getToken } = useAuth()
 
@@ -59,21 +57,17 @@ export default function ChoresPage() {
     const fetchChores = async () => {
       const token = await getToken({ template: "supabase" })
       if (token) {
-        const fetchedChores: Chore[] | null = await getChores({ userId, token })
+        const fetchedChores: Chore[] | null = await getChores({ userId })
         const fetchedMembersChores: Member[] | null =
-          (await getMembersChores({
+          (await getMembers({
             userId: userId || "",
-            token: token || "",
           })) ?? null
-        const fetchedRemovedChores: Chore[] | null = await getDeletedChore({
-          userId: userId || "",
-          token: token || "",
-        })
+        // Removed fetchedRemovedChores since getDeletedChore doesn't exist
 
-        const fetchedChoresData = await getChores({ userId, token })
+        const fetchedChoresData = await getChores({ userId })
         setChores(fetchedChoresData || [])
         setMembers(fetchedMembersChores || [])
-        setRemovedChores(fetchedRemovedChores || [])
+        setRemovedChores([]) // Set empty array since getDeletedChore doesn't exist
         setLoadingChores(false)
       } else {
         toast.error("Failed to get the token")
@@ -99,24 +93,23 @@ export default function ChoresPage() {
   ): Promise<void> => {
     e.preventDefault()
     setAddingChore(true)
-    const token = await getToken({ template: "supabase" })
 
-    if (newChore.name && newChore.points) {
-      const addedChore: AddChoreResponse[] | null = await addChore({
-        userId: userId ?? "",
-        token: token ?? "",
+    if (newChore.name && newChore.points && userId) {
+      const addedChore = await addChore({
+        userId,
         newChore,
       })
       if (addedChore) {
-        setChores([
-          ...chores,
-          { ...addedChore[0], count: 0, date: [] } as Chore,
-        ])
+        // Refresh the chores list
+        const updatedChores = await getChores({ userId })
+        setChores(updatedChores || [])
         setNewChore({ name: "", points: 0 })
         toast.success("Chore added successfully.")
       } else {
         toast.error("Failed to add chore.")
       }
+    } else {
+      toast.error("Please fill all fields.")
     }
     setAddingChore(false)
   }
@@ -137,203 +130,105 @@ export default function ChoresPage() {
     e.preventDefault()
     setEditingChore(true)
 
-    const token: string | null = await getToken({ template: "supabase" })
-    if (!token) {
-      toast.error("Failed to get the token.")
-      return
-    }
-    const result: UpdateChoreResponse | null = await updateChore({
-      token,
-      choreEdited: {
-        ...choreEdited,
-        id: String(choreEdited.id),
-      },
-    }).then((response) => {
-      if (Array.isArray(response)) {
-        return { success: response.length > 0 }
-      }
-      return response
-    })
-    if (!result) {
-      toast.error("Failed to e chore.")
-      return
-    }
-    if (!userId) {
-      toast.error("User ID is missing.")
+    if (!userId || !choreEdited.id) {
+      toast.error("Missing required information.")
       setEditingChore(false)
       return
     }
-    const updatedChores: Chore[] | null = await getChores({ userId, token })
-    setChores(updatedChores || [])
-    setChoreEdited({ id: null, name: "", points: 0 })
-    setIsEditOpen(false)
-    toast.success("Chore edited successfully!")
+
+    const result = await updateChore({
+      choreEdited: {
+        ...choreEdited,
+        id: choreEdited.id,
+      } as Chore,
+    })
+
+    if (result) {
+      const updatedChores: Chore[] | null = await getChores({ userId })
+      setChores(updatedChores || [])
+      setChoreEdited({ id: null, name: "", points: 0 })
+      setIsEditOpen(false)
+      toast.success("Chore edited successfully!")
+    } else {
+      toast.error("Failed to edit chore.")
+    }
     setEditingChore(false)
   }
 
   const handleDeleteChore = async (choreToDelete: Chore) => {
-    const token = await getToken({ template: "supabase" })
-    if (!token) {
-      toast.error("Failed to get the token.")
-      return
-    }
-
-    // Check if the chore is related to any members
-    const { isRelated } = await checkChoreRelation({ token, choreToDelete })
-
-    if (isRelated) {
-      setConfirmationMessage(
-        `This chore is related to some members. Deleting it will also remove points from those members. Do you want to proceed?`
-      )
-    } else {
-      setConfirmationMessage(
-        `Are you sure you want to delete this chore permanently?`
-      )
-    }
-
-    setChoreToConfirm(choreToDelete)
-    setIsConfirmOpen(true)
+    setChoreToDelete(choreToDelete)
+    setIsDeleteConfirmOpen(true)
   }
 
-  const handlePermanentDeleteChore = async () => {
-    if (!choreToDelete) return
-
-    const token = await getToken({ template: "supabase" })
-    if (!token) {
-      toast.error("Failed to get the token.")
-      setDeletingChoreId(null) // Reset the deleting chore ID
-      setIsConfirmOpen(false)
+  const handleConfirmDelete = async (deleteData: boolean) => {
+    if (!choreToDelete || !userId) {
+      toast.error("Missing required information.")
       return
     }
 
-    const relationCheck = await checkChoreRelation({ token, choreToDelete })
-    setIsRelatedToMember(relationCheck.isRelated)
+    setDeletingChore(true)
+    setIsDeleteConfirmOpen(false)
 
-    if (relationCheck.isRelated) {
-      // Show confirmation modal with the message
-      setIsConfirmOpen(true)
-    } else {
-      // If not related, delete immediately
-      const success = await deleteChorePermanently({ token, choreToDelete })
-      if (success) {
-        setRemovedChores((prevRemovedChores) =>
-          prevRemovedChores.filter((chore) => chore.id !== choreToDelete.id)
-        )
-        toast.success("Chore permanently deleted successfully.")
+    try {
+      let result
+      if (deleteData) {
+        // Hard delete - removes all completion data and affects member points
+        result = await hardDeleteChore({ choreId: choreToDelete.id || 0 })
       } else {
-        toast.error("Failed to permanently delete chore.")
+        // Soft delete - preserves member data
+        result = await deleteChore({ choreId: choreToDelete.id || 0 })
       }
-      setDeletingChoreId(null) // Reset the deleting chore ID
+
+      if (result) {
+        const updatedChores = await getChores({ userId })
+        setChores(updatedChores || [])
+        toast.success(
+          deleteData
+            ? "Chore deleted and all completion data removed from members!"
+            : "Chore deleted successfully! Member completion data preserved."
+        )
+      } else {
+        toast.error("Failed to delete chore.")
+      }
+    } catch (error) {
+      console.error("Error deleting chore:", error)
+      toast.error("An error occurred while deleting the chore.")
+    } finally {
+      setDeletingChore(false)
+      setChoreToDelete(null)
     }
-  }
-
-  const confirmPermanentDelete = async () => {
-    if (!choreToDelete) return
-
-    const token = await getToken({ template: "supabase" })
-    if (!token) {
-      toast.error("Failed to get the token.")
-      setDeletingChoreId(null) // Reset the deleting chore ID
-      setIsConfirmOpen(false)
-      return
-    }
-
-    const success = await deleteChorePermanently({
-      token,
-      choreToDelete,
-    })
-    if (success) {
-      setRemovedChores((prevRemovedChores) =>
-        prevRemovedChores.filter((chore) => chore.id !== choreToDelete.id)
-      )
-      toast.success("Chore permanently deleted successfully.")
-    } else {
-      toast.error("Failed to permanently delete chore.")
-    }
-    setDeletingChoreId(null) // Reset the deleting chore ID
-    setIsConfirmOpen(false)
-  }
-
-  const handleConfirmDelete = async () => {
-    if (!choreToConfirm) return
-
-    const token = await getToken({ template: "supabase" })
-    if (!token) {
-      toast.error("Failed to get the token.")
-      return
-    }
-
-    const success = await deleteChorePermanently({
-      token,
-      choreToDelete: choreToConfirm,
-    })
-
-    if (success) {
-      setChores((prevChores) =>
-        prevChores.filter((chore) => chore.id !== choreToConfirm.id)
-      )
-      toast.success("Chore deleted permanently.")
-    } else {
-      toast.error("Failed to delete chore.")
-    }
-
-    setIsConfirmOpen(false)
-    setChoreToConfirm(null)
   }
 
   const handleClaimChore = async (chore: Chore, member: Member) => {
-    try {
-      const token = await getToken({ template: "supabase" })
-      const result = await claimChore({
-        token: token ?? "",
-        chore: { ...chore, id: String(chore.id) },
-        member: { ...member, id: String(member.id) },
-      })
-
-      if (result) {
-        const updatedMembers = members.map((m) =>
-          m.id === member.id ? { ...m, points: result.memberData[0].points } : m
-        )
-        const updatedChores = chores.map((r) =>
-          r.id === chore.id
-            ? {
-                ...r,
-                members: (r.members ?? []).some((m) => m.id === member.id)
-                  ? (r.members ?? []).map((m) =>
-                      m.id === member.id
-                        ? {
-                            ...m,
-                            count: (m.count ?? 0) + 1,
-                            date: [...(m.date || []), new Date().toISOString()],
-                          }
-                        : m
-                    )
-                  : [
-                      ...(r.members ?? []),
-                      {
-                        id: member.id,
-                        name: member.name,
-                        role: member.role,
-                        points: member.points, // Ensure 'points' is included
-                        count: 1,
-                        date: [new Date().toISOString()],
-                      } as Member, // Explicitly cast to Member
-                    ],
-              }
-            : r
-        )
-
-        setMembers(updatedMembers)
-        setChores(updatedChores)
-        toast.success(`${member.name} claimed the chore successfully!`)
-      } else {
-        toast.error("Failed to claim chore.")
-      }
-    } catch (error) {
-      const errorMessage =
-        error instanceof Error ? error.message : "An unknown error occurred"
-      toast.error(`Error handling claim chore: ${errorMessage}`)
+    if (!userId) {
+      toast.error("User ID is missing.")
+      return
     }
+
+    setClaimingChore(true)
+    setClaimingMemberId(member.id)
+
+    const result = await claimChore({
+      memberId: member.id,
+      choreId: chore.id || 0,
+    })
+
+    if (result) {
+      // Update the members list with new points
+      const updatedMembers = await getMembers({ userId })
+      setMembers(updatedMembers || [])
+
+      // Also update the chores list to reflect the new completion count
+      const updatedChores = await getChores({ userId })
+      setChores(updatedChores || [])
+
+      toast.success(`${member.name} claimed "${chore.name}" successfully!`)
+    } else {
+      toast.error("Failed to claim chore.")
+    }
+
+    setClaimingChore(false)
+    setClaimingMemberId(null)
   }
 
   return (
@@ -356,11 +251,8 @@ export default function ChoresPage() {
         />
         <TrashChoresDialog
           removedChores={removedChores}
-          handlePermanentDeleteChore={(chore) => {
-            setChoreToDelete(chore)
-            handlePermanentDeleteChore()
-          }}
-          deletingChoreId={deletingChoreId}
+          handlePermanentDeleteChore={() => {}} // Placeholder for now
+          deletingChoreId={null}
         />
       </Header>
       {loadingChores ? (
@@ -377,6 +269,8 @@ export default function ChoresPage() {
                 members={members}
                 setSelectedChore={setSelectedChore}
                 handleClaimChore={handleClaimChore}
+                isClaimingChore={claimingChore}
+                claimingMemberId={claimingMemberId}
               />
             ))
           ) : (
@@ -391,10 +285,18 @@ export default function ChoresPage() {
         setIsEditOpen={setIsEditOpen}
         choreEdited={choreEdited}
         setChoreEdited={setChoreEdited}
-        handleEditChore={(e: React.FormEvent<HTMLFormElement>) =>
-          handleEditChore(e)
-        }
+        handleEditChore={handleEditChore}
         loading={editingChore}
+      />
+
+      <DeleteConfirmationDialog
+        isOpen={isDeleteConfirmOpen}
+        setIsOpen={setIsDeleteConfirmOpen}
+        title={`Delete ${choreToDelete?.name}`}
+        itemName={choreToDelete?.name || ""}
+        itemType="chore"
+        onConfirm={handleConfirmDelete}
+        isLoading={deletingChore}
       />
     </div>
   )

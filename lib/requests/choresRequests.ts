@@ -1,102 +1,75 @@
 import { Chore } from "@/common.types"
-import { supabaseClient } from "../supabaseClient"
+import { supabase } from "../supabaseClient"
 
-// get chores
-export async function getChores({
-  userId,
-  token,
-}: {
-  userId: string
-  token: string
-}) {
-  const supabase = await supabaseClient(token)
-
-  // Fetch chores with related member_chore and members data
-  const { data: chores, error } = await supabase
-    .from("chore")
-    .select(
+export async function getChores({ userId }: { userId: string }) {
+  try {
+    // Fetch chores with related member data
+    const { data: chores, error: choresError } = await supabase
+      .from("chore")
+      .select(
+        `
+        *,
+        members:member_chore(
+          member_id,
+          count,
+          date,
+          member:members(*)
+        )
       `
-      *,
-      member_chore (
-        date,
-        count,
-        member_id,
-        chore_id
-      ),
-      members!member_chore(id, name, points)
-    `
-    )
-    .eq("user_id", userId)
-    .eq("status", "active")
+      )
+      .eq("clerk_user_id", userId)
+      .is("deleted_at", null)
 
-  if (error) {
+    if (choresError) {
+      console.error("Error fetching chores:", choresError)
+      return []
+    }
+
+    // Process the data to match the desired schema
+    const processedChores = chores.map((chore) => {
+      return {
+        ...chore,
+        members: chore.members.map((m: any) => ({
+          ...m.member,
+          count: m.count,
+          date: m.date,
+        })),
+      }
+    })
+
+    return processedChores
+  } catch (error) {
     console.error("Error fetching chores:", error)
     return []
   }
-
-  // Merge member_chore data into members object
-  chores.forEach((chore) => {
-    chore.members = chore.members.map((member: any) => {
-      const memberChore = chore.member_chore.find(
-        (mc: any) => mc.member_id === member.id
-      )
-      return memberChore
-        ? { ...member, count: memberChore.count, date: memberChore.date }
-        : member
-    })
-  })
-
-  // Log and return the chores
-  console.log(chores)
-  return chores
 }
 
-// get members for rewards
-export async function getMembersChores({
-  userId,
-  token,
-}: {
-  userId: string
-  token: string
-}) {
-  const supabase = await supabaseClient(token)
-  const { data: members, error } = await supabase
-    .from("members")
-    .select("id,name,points,role")
-    .eq("user_id", userId)
-  if (error) {
-    console.log(error)
-    return
-  }
-
-  return members
-}
-
-// add a chore
+// Add a new chore
 export const addChore = async ({
   userId,
-  token,
   newChore,
 }: {
   userId: string
-  token: string
-  newChore: any
+  newChore: Partial<Chore>
 }) => {
-  const supabase = await supabaseClient(token)
   try {
-    // Perform the insertion
+    // Directly insert with clerk_user_id
     const { data, error } = await supabase
-      .from("chore") // Replace 'chores' with your actual table name
-      .insert([{ user_id: userId, ...newChore }])
-      .select("*") // Ensure single is used if inserting one record
+      .from("chore")
+      .insert([
+        {
+          clerk_user_id: userId,
+          name: newChore.name,
+          points: newChore.points || 0,
+        },
+      ])
+      .select("*")
 
-    // Check if there's an error
     if (error) {
-      console.error("Error adding chore:", (error as unknown as Error).message)
+      console.error("Error adding chore:", error.message)
       return null
     }
 
-    // Return the inserted data
     return data
   } catch (error) {
     console.error("Error adding chore:", (error as Error).message)
@@ -104,36 +77,26 @@ export const addChore = async ({
   }
 }
 
-// update a chore
-export const updateChore = async ({
-  token,
-  choreEdited,
-}: {
-  token: string
-  choreEdited: { id: string; name: string; points: number }
-}) => {
-  const supabase = await supabaseClient(token)
+// Update a chore
+export const updateChore = async ({ choreEdited }: { choreEdited: Chore }) => {
   try {
+    // Only include columns that exist in the database
+    const updateData = {
+      name: choreEdited.name,
+      points: choreEdited.points,
+    }
+
     const { data, error } = await supabase
       .from("chore")
-      .update({
-        // Add the fields you want to update here
-        name: choreEdited.name,
-        points: choreEdited.points,
-      })
+      .update(updateData)
       .eq("id", choreEdited.id)
       .select("*")
 
-    // Check if there's an error
     if (error) {
-      console.error(
-        "Error updating chore:",
-        (error as unknown as Error).message
-      )
+      console.error("Error updating chore:", error.message)
       return null
     }
 
-    // Return the updated data
     return data
   } catch (error) {
     console.error("Error updating chore:", (error as Error).message)
@@ -141,264 +104,218 @@ export const updateChore = async ({
   }
 }
 
-// Delete a chore (update status into removed)
-export const deleteChore = async ({
-  token,
-  choreToDelete,
-}: {
-  token: string
-  choreToDelete: Chore
-}): Promise<boolean> => {
-  const supabase = await supabaseClient(token)
-
+// Delete a chore (soft delete to preserve member data)
+export const deleteChore = async ({ choreId }: { choreId: number }) => {
   try {
-    const { error } = await supabase
+    // Instead of hard delete, mark as deleted to preserve member relationship data
+    const { data, error } = await supabase
       .from("chore")
-      .update({ status: "removed" })
-      .eq("id", choreToDelete.id)
+      .update({ deleted_at: new Date().toISOString() })
+      .eq("id", choreId)
+      .select("*")
 
     if (error) {
-      console.error("Error updating chore status to removed:", error.message)
-      return false
+      console.error("Error deleting chore:", error.message)
+      return null
     }
 
-    return true
+    return data
   } catch (error) {
     console.error("Error deleting chore:", (error as Error).message)
-    return false
+    return null
   }
 }
 
-// Get removed chores
-export const getDeletedChore = async ({
-  userId,
-  token,
-}: {
-  userId: string
-  token: string
-}) => {
-  const supabase = await supabaseClient(token)
-  const { data: removedChores, error } = await supabase
-    .from("chore")
-    .select("*")
-    .eq("status", "removed")
-    .eq("user_id", userId)
-
-  if (error) {
-    console.error("Error fetching removed chores:", error.message)
-    return []
-  }
-
-  return removedChores
-}
-
-// Permanently delete a chore and any related data
-export const deleteChorePermanently = async ({
-  token,
-  choreToDelete,
-}: {
-  token: string
-  choreToDelete: Chore
-}): Promise<boolean> => {
-  const supabase = await supabaseClient(token)
-
+// Hard delete a chore (removes all completion data and affects member points)
+export const hardDeleteChore = async ({ choreId }: { choreId: number }) => {
   try {
-    // Check if the chore is related to any members
-    const { data: memberChores, error: memberChoreError } = await supabase
+    // First, get all member completions for this chore to deduct points
+    const { data: completions, error: completionsError } = await supabase
       .from("member_chore")
-      .select("member_id, count")
-      .eq("chore_id", choreToDelete.id)
+      .select("member_id, count, chore:chore(points)")
+      .eq("chore_id", choreId)
 
-    if (memberChoreError) {
-      console.error("Error fetching member chores:", memberChoreError.message)
-      return false
+    if (completionsError) {
+      console.error("Error fetching completions:", completionsError.message)
+      return null
     }
 
-    if (memberChores.length > 0) {
-      // Chore is related to members, deduct points and delete related items
-      for (const memberChore of memberChores) {
-        const { member_id, count } = memberChore
+    // Deduct points from members
+    if (completions && completions.length > 0) {
+      for (const completion of completions) {
+        const pointsToDeduct =
+          completion.count * (completion.chore as any).points
 
-        // Fetch chore details to get points
-        const { data: choreData, error: choreError } = await supabase
-          .from("chore")
+        // Get current member points
+        const { data: member, error: memberError } = await supabase
+          .from("members")
           .select("points")
-          .eq("id", choreToDelete.id)
+          .eq("id", completion.member_id)
           .single()
 
-        if (choreError) {
-          console.error("Error fetching chore details:", choreError.message)
-          return false
-        }
+        if (memberError || !member) continue
 
-        const { points } = choreData
-
-        // Deduct points from the member
-        const { error: memberError } = await supabase
+        // Update member points (allow negative)
+        await supabase
           .from("members")
-          .update({
-            points: supabase.rpc("subtract_points", { points: points * count }),
-          })
-          .eq("id", member_id)
-
-        if (memberError) {
-          console.error(
-            "Error deducting points from member:",
-            memberError.message
-          )
-          return false
-        }
-
-        // Delete related item from member_chore
-        const { error: deleteMemberChoreError } = await supabase
-          .from("member_chore")
-          .delete()
-          .eq("id", (memberChore as any).id)
-
-        if (deleteMemberChoreError) {
-          console.error(
-            "Error deleting member chore:",
-            deleteMemberChoreError.message
-          )
-          return false
-        }
+          .update({ points: member.points - pointsToDeduct })
+          .eq("id", completion.member_id)
       }
     }
 
-    // Delete the chore from chores table
-    const { error: deleteChoreError } = await supabase
+    // Delete member_chore relationships
+    await supabase.from("member_chore").delete().eq("chore_id", choreId)
+
+    // Delete the chore itself
+    const { data, error } = await supabase
       .from("chore")
       .delete()
-      .eq("id", choreToDelete.id)
-
-    if (deleteChoreError) {
-      console.error("Error deleting chore:", deleteChoreError.message)
-      return false
-    }
-
-    return true
-  } catch (error) {
-    console.error("Error deleting chore permanently:", (error as Error).message)
-    return false
-  }
-}
-
-interface CheckChoreRelationParams {
-  token: string
-  choreToDelete: Chore
-}
-
-export const checkChoreRelation = async ({
-  token,
-  choreToDelete,
-}: CheckChoreRelationParams): Promise<{ isRelated: boolean }> => {
-  const supabase = await supabaseClient(token)
-
-  const { data, error } = await supabase
-    .from("member_chore")
-    .select("id")
-    .eq("chore_id", choreToDelete.id)
-    .single()
-
-  if (error) {
-    console.error("Error checking chore relation:", error)
-    return { isRelated: false }
-  }
-
-  return { isRelated: !!data }
-}
-
-// Claim a chore
-export const claimChore = async ({
-  token,
-  chore,
-  member,
-}: {
-  token: string
-  chore: { id: string; points: number }
-  member: { id: string; points: number }
-}) => {
-  const supabase = await supabaseClient(token)
-  try {
-    // Increment member's points
-    const updatedMember = {
-      ...member,
-      points: member.points + chore.points,
-    }
-
-    // Update member's points in the database
-    const { data: memberData, error: memberError } = await supabase
-      .from("members")
-      .update({ points: updatedMember.points })
-      .eq("id", member.id)
+      .eq("id", choreId)
       .select("*")
 
-    if (memberError) {
-      console.error("Error updating member's points:", memberError.message)
+    if (error) {
+      console.error("Error hard deleting chore:", error.message)
       return null
     }
-    console.log("Updated member points:", memberData)
 
-    // Check if the member has already claimed this chore
-    const { data: existingMemberChore, error: fetchError } = await supabase
+    return data
+  } catch (error) {
+    console.error("Error hard deleting chore:", (error as Error).message)
+    return null
+  }
+}
+
+// Get chore completion history
+export const getChoreHistory = async ({ choreId }: { choreId: number }) => {
+  try {
+    const { data, error } = await supabase
       .from("member_chore")
-      .select("*")
-      .eq("member_id", member.id)
-      .eq("chore_id", chore.id)
+      .select(
+        `
+        *,
+        member:members(*)
+      `
+      )
+      .eq("chore_id", choreId)
+      .order("created_at", { ascending: false })
+
+    if (error) {
+      console.error("Error fetching chore history:", error.message)
+      return []
+    }
+
+    return data
+  } catch (error) {
+    console.error("Error fetching chore history:", (error as Error).message)
+    return []
+  }
+}
+
+// Claim a chore (member completes a chore)
+export const claimChore = async ({
+  memberId,
+  choreId,
+}: {
+  memberId: number
+  choreId: number
+}) => {
+  try {
+    // First get the chore points
+    const { data: chore, error: choreError } = await supabase
+      .from("chore")
+      .select("points")
+      .eq("id", choreId)
       .single()
 
-    if (fetchError && (fetchError as any).code !== "PGRST116") {
-      console.error("Error fetching existing member chore:", fetchError.message)
+    if (choreError) {
+      console.error("Error fetching chore:", choreError.message)
       return null
     }
-    console.log("Existing member chore:", existingMemberChore)
 
-    if (existingMemberChore) {
-      // Update the existing entry
-      const updatedMemberChore = {
-        ...existingMemberChore,
-        count: existingMemberChore.count + 1,
-        date: [...existingMemberChore.date, new Date().toISOString()],
-      }
+    // Update member points
+    const { data: member, error: memberError } = await supabase
+      .from("members")
+      .select("points")
+      .eq("id", memberId)
+      .single()
 
-      const { data: memberChoreData, error: memberChoreError } = await supabase
-        .from("member_chore")
-        .update(updatedMemberChore)
-        .eq("member_id", member.id)
-        .eq("chore_id", chore.id)
-        .select("*")
+    if (memberError) {
+      console.error("Error fetching member:", memberError.message)
+      return null
+    }
 
-      if (memberChoreError) {
-        console.error("Error updating member_chore:", memberChoreError.message)
+    const newPoints = (member.points || 0) + (chore.points || 0)
+
+    const { data: updatedMember, error: updateError } = await supabase
+      .from("members")
+      .update({ points: newPoints })
+      .eq("id", memberId)
+      .select("*")
+
+    if (updateError) {
+      console.error("Error updating member points:", updateError.message)
+      return null
+    }
+
+    // Record the chore completion or update existing record
+    // First check if a record already exists
+    const { data: existingRecord, error: checkError } = await supabase
+      .from("member_chore")
+      .select("*")
+      .eq("member_id", memberId)
+      .eq("chore_id", choreId)
+      .single()
+
+    let completion
+    if (existingRecord) {
+      // Update existing record by incrementing count and appending new date
+      const { data: updatedCompletion, error: updateCompletionError } =
+        await supabase
+          .from("member_chore")
+          .update({
+            count: (existingRecord.count || 0) + 1,
+            date: [...(existingRecord.date || []), new Date().toISOString()],
+          })
+          .eq("member_id", memberId)
+          .eq("chore_id", choreId)
+          .select("*")
+
+      if (updateCompletionError) {
+        console.error(
+          "Error updating chore completion:",
+          updateCompletionError.message
+        )
         return null
       }
-      console.log("Updated member chore:", memberChoreData)
-
-      return { memberData, memberChoreData }
+      completion = updatedCompletion
     } else {
-      // Insert a new entry into the member_chore table
-      const { data: memberChoreData, error: memberChoreError } = await supabase
+      // Create new record
+      const { data: newCompletion, error: completionError } = await supabase
         .from("member_chore")
         .insert([
           {
-            member_id: member.id,
-            chore_id: chore.id,
+            member_id: memberId,
+            chore_id: choreId,
             count: 1,
-            date: [new Date().toISOString()],
+            // Let the database handle the date array with its default value
           },
         ])
         .select("*")
 
-      if (memberChoreError) {
+      if (completionError) {
         console.error(
-          "Error inserting into member_chore:",
-          memberChoreError.message
+          "Error recording chore completion:",
+          completionError.message
         )
         return null
       }
-      console.log("Inserted new member chore:", memberChoreData)
+      completion = newCompletion
+    }
 
-      return { memberData, memberChoreData }
+    return {
+      member: updatedMember[0],
+      completion: completion?.[0],
+      pointsEarned: chore.points,
     }
   } catch (error) {
     console.error("Error claiming chore:", (error as Error).message)

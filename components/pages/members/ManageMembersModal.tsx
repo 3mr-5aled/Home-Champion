@@ -7,29 +7,27 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog"
-import { LuPencil, LuTrash } from "react-icons/lu"
+import { LuPencil, LuTrash, LuRotateCcw } from "react-icons/lu"
 import { Member } from "@/common.types"
 
 interface ManageMembersModalProps {
   isManageOpen: boolean
   setIsManageOpen: (open: boolean) => void
   members: Member[]
-  setSelectedMember: (member: Member) => void
-  setIsDeductOpen: (open: boolean) => void
   setIsEditOpen: (open: boolean) => void
   setMemberEdited: (member: Member) => void
   handleDeleteMember: (member: Member) => void
+  handleResetMember: (member: Member) => void
 }
 
 const ManageMembersModal: React.FC<ManageMembersModalProps> = ({
   isManageOpen,
   setIsManageOpen,
   members,
-  setSelectedMember,
-  setIsDeductOpen,
   setIsEditOpen,
   setMemberEdited,
   handleDeleteMember,
+  handleResetMember,
 }) => (
   <Dialog open={isManageOpen} onOpenChange={setIsManageOpen}>
     <DialogContent className="sm:max-w-[425px]">
@@ -53,15 +51,6 @@ const ManageMembersModal: React.FC<ManageMembersModalProps> = ({
                 </div>
                 <div className="flex gap-2">
                   <button
-                    className="btn btn-accent btn-sm"
-                    onClick={() => {
-                      setSelectedMember(member)
-                      setIsDeductOpen(true)
-                    }}
-                  >
-                    Deduct Points
-                  </button>
-                  <button
                     className="btn btn-secondary btn-sm"
                     onClick={() => {
                       setMemberEdited(member)
@@ -69,6 +58,13 @@ const ManageMembersModal: React.FC<ManageMembersModalProps> = ({
                     }}
                   >
                     <LuPencil />
+                  </button>
+                  <button
+                    className="btn btn-warning btn-sm"
+                    onClick={() => handleResetMember(member)}
+                    title="Reset points and history"
+                  >
+                    <LuRotateCcw />
                   </button>
                   <button
                     className="btn btn-error btn-sm"

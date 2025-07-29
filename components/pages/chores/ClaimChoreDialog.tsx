@@ -14,12 +14,16 @@ interface ClaimChoreDialogProps {
   chore: Chore
   members: Member[]
   handleClaimChore: (chore: Chore, member: Member) => void
+  isLoading?: boolean
+  loadingMemberId?: number
 }
 
 const ClaimChoreDialog: React.FC<ClaimChoreDialogProps> = ({
   chore,
   members,
   handleClaimChore,
+  isLoading = false,
+  loadingMemberId,
 }) => {
   return (
     <Dialog>
@@ -44,9 +48,19 @@ const ClaimChoreDialog: React.FC<ClaimChoreDialogProps> = ({
                 key={member.id}
                 className="btn btn-secondary custom-btn text-white flex flex-col items-center p-2"
                 onClick={() => handleClaimChore(chore, member)}
+                disabled={isLoading}
               >
-                <span>{member.name}</span>
-                <span>{member.points} pts</span>
+                {isLoading && loadingMemberId === member.id ? (
+                  <div className="flex flex-col items-center">
+                    <div className="loading loading-spinner loading-sm"></div>
+                    <span className="text-xs">Claiming...</span>
+                  </div>
+                ) : (
+                  <>
+                    <span>{member.name}</span>
+                    <span>{member.points} pts</span>
+                  </>
+                )}
               </button>
             ))
           ) : (

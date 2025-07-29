@@ -7,6 +7,8 @@ interface ChoreCardProps {
   members: Member[]
   setSelectedChore: (chore: Chore | null) => void
   handleClaimChore: (chore: Chore, member: Member) => void
+  isClaimingChore?: boolean
+  claimingMemberId?: number | null
 }
 
 const ChoreCard: React.FC<ChoreCardProps> = ({
@@ -14,6 +16,8 @@ const ChoreCard: React.FC<ChoreCardProps> = ({
   members,
   setSelectedChore,
   handleClaimChore,
+  isClaimingChore = false,
+  claimingMemberId,
 }) => (
   <div className="rounded-lg bg-base-200 border-2 border-black p-6 shadow-card">
     <div className="flex flex-row flex-wrap sm:flex-nowrap items-center gap-2 justify-between w-full">
@@ -26,6 +30,8 @@ const ChoreCard: React.FC<ChoreCardProps> = ({
           chore={chore}
           members={members}
           handleClaimChore={handleClaimChore}
+          isLoading={isClaimingChore}
+          loadingMemberId={claimingMemberId || undefined}
         />
         <ViewClaimedMembersDialog
           chore={chore}

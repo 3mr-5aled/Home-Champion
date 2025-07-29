@@ -1,30 +1,33 @@
 "use client"
-import { useState, useEffect } from "react"
-import {
-  AddMemberModal,
-  ManageMembersModal,
-  EditMemberModal,
-  DeductPointsModal,
-  ViewDetailsModal,
-  MemberCard,
-} from "@/components/pages/members"
-import Header from "@/components/ui/Header"
+
+import { useEffect, useState } from "react"
+import { toast } from "react-toastify"
+// supabase and clerk import
 import { useAuth } from "@clerk/nextjs"
 import {
   addMember,
-  deductPoints,
   deleteMember,
-  deletePunishment,
-  deleteRelatedChore,
-  deleteRelatedReward,
   getMembers,
   updateMember,
-} from "@/lib/requests"
-import { toast } from "react-toastify"
+  deductPoints,
+  deleteDeduction,
+  deleteChoreCompletion,
+  deleteRewardRedemption,
+  resetMember,
+} from "@/lib/requests/membersRequests"
 import { Member } from "@/common.types"
+import Header from "@/components/ui/Header"
+import {
+  AddMemberModal,
+  DeductPointsModal,
+  EditMemberModal,
+  ManageMembersModal,
+  MemberCard,
+  ViewDetailsModal,
+} from "@/components/pages/members"
 
 const MembersPage = () => {
-  const { userId, getToken } = useAuth()
+  const { userId } = useAuth()
   const [members, setMembers] = useState<Member[]>([])
   const [selectedMember, setSelectedMember] = useState<Member | null>(null)
   const [isAddOpen, setIsAddOpen] = useState(false)
@@ -33,19 +36,17 @@ const MembersPage = () => {
   const [isDeductOpen, setIsDeductOpen] = useState(false)
   const [isViewDetailsOpen, setIsViewDetailsOpen] = useState(false)
   const [newMember, setNewMember] = useState<Member>({
-    id: 0, // Default id value
+    id: 0,
     name: "",
     role: "",
     points: 0,
     pointsDeducted: [],
   })
   const [memberEdited, setMemberEdited] = useState<Member>({
-    id: 0, // Default id value
+    id: 0,
     name: "",
     role: "",
     points: 0,
-    chore: [],
-    reward: [],
     pointsDeducted: [],
   })
   const [deductionDetails, setDeductionDetails] = useState({
@@ -53,143 +54,198 @@ const MembersPage = () => {
     amount: 0,
   })
 
+  // Loading states
+  const [loadingMembers, setLoadingMembers] = useState<boolean>(true)
+  const [addingMember, setAddingMember] = useState<boolean>(false)
+  const [editingMember, setEditingMember] = useState<boolean>(false)
+  const [deletingMemberId, setDeletingMemberId] = useState<number | null>(null)
+  const [deductingPoints, setDeductingPoints] = useState<boolean>(false)
+  const [deletingActivity, setDeletingActivity] = useState<boolean>(false)
+
   // Fetch members
   useEffect(() => {
     const fetchMembers = async () => {
-      const token = await getToken({ template: "supabase" })
-      if (token) {
+      if (userId) {
+        setLoadingMembers(true)
+        console.log("Fetching members for userId:", userId)
         const fetchedMembers: Member[] | null = await getMembers({
-          userId: userId ?? "",
-          token,
+          userId,
         })
         setMembers(fetchedMembers || [])
         console.log("Fetched Members:", fetchedMembers)
-      } else {
-        toast.error("Failed to get the token")
+        setLoadingMembers(false)
       }
     }
 
     if (userId) {
       fetchMembers()
     }
-  }, [userId, getToken])
+  }, [userId])
 
   const handleAddMember = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
+    setAddingMember(true)
     try {
-      const token = await getToken({ template: "supabase" })
-      if (!token) {
-        toast.error("Failed to get the token.")
-        return
-      }
       if (!userId) {
         toast.error("User ID is missing.")
         return
       }
-      const result = await addMember({ userId, token, newMember })
+      console.log("Adding member:", newMember, "for userId:", userId)
+      const result = await addMember({ userId, newMember })
       if (!result) {
         toast.error("Failed to add member.")
         return
       }
-      if (!userId) {
-        toast.error("User ID is missing.")
-        return
-      }
-      const updatedMembers: Member[] = await getMembers({ userId, token })
-      setMembers(updatedMembers)
+
+      const updatedMembers: Member[] | null = await getMembers({ userId })
+      setMembers(updatedMembers || [])
       setNewMember({ id: 0, name: "", role: "", points: 0, pointsDeducted: [] })
       setIsAddOpen(false)
       toast.success("Member added successfully!")
     } catch (error) {
       console.error("Error adding member:", error)
       toast.error("An error occurred while adding the member.")
+    } finally {
+      setAddingMember(false)
     }
   }
 
   const handleEditMember = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
-    const token = await getToken({ template: "supabase" })
-    if (!token) {
-      toast.error("Failed to get the token.")
-      return
+    setEditingMember(true)
+    try {
+      if (!userId) {
+        toast.error("User ID is missing.")
+        return
+      }
+      console.log("Editing member:", memberEdited)
+      const result = await updateMember({
+        memberEdited: {
+          ...memberEdited,
+          role: memberEdited.role || "Member",
+        },
+      })
+      if (!result) {
+        toast.error("Failed to edit member.")
+        return
+      }
+
+      const updatedMembers = await getMembers({ userId })
+      setMembers(updatedMembers || [])
+      setMemberEdited({
+        id: 0,
+        name: "",
+        role: "",
+        points: 0,
+        pointsDeducted: [],
+      })
+      setIsEditOpen(false)
+      setIsManageOpen(false)
+      toast.success("Member edited successfully!")
+    } catch (error) {
+      console.error("Error editing member:", error)
+      toast.error("An error occurred while editing the member.")
+    } finally {
+      setEditingMember(false)
     }
-    const result = await updateMember({
-      token,
-      memberEdited: {
-        ...memberEdited,
-        id: memberEdited.id.toString(),
-        role: memberEdited.role || "defaultRole",
-      },
-    })
-    if (!result) {
-      toast.error("Failed to edit member.")
-      return
-    }
-    if (!userId) {
-      toast.error("User ID is missing.")
-      return
-    }
-    const updatedMembers = await getMembers({ userId: userId ?? "", token })
-    setMembers(updatedMembers || [])
-    setMemberEdited({
-      id: 0, // Default id value
-      name: "",
-      role: "",
-      points: 0,
-      chore: [],
-      reward: [],
-      pointsDeducted: [],
-    })
-    setIsEditOpen(false)
-    setIsManageOpen(false)
-    toast.success("Member edited successfully!")
   }
 
   const handleDeleteMember = async (memberToDelete: Member) => {
-    const token = await getToken({ template: "supabase" })
-    if (!token) {
-      toast.error("Failed to get the token.")
+    setDeletingMemberId(memberToDelete.id)
+    try {
+      if (!userId) {
+        toast.error("User ID is missing.")
+        return
+      }
+      console.log("Deleting member:", memberToDelete.id)
+      const result = await deleteMember({
+        memberId: memberToDelete.id,
+      })
+      if (!result) {
+        toast.error("Failed to delete member.")
+        return
+      }
+      const updatedMembers = await getMembers({ userId })
+      setMembers(updatedMembers || [])
+      toast.success("Member deleted successfully!")
+    } catch (error) {
+      console.error("Error deleting member:", error)
+      toast.error("An error occurred while deleting the member.")
+    } finally {
+      setDeletingMemberId(null)
+    }
+  }
+
+  const handleResetMember = async (memberToReset: Member) => {
+    const confirmMessage = `Are you sure you want to reset ${memberToReset.name}?\n\nThis will:\n• Reset their points to 0\n• Delete all chore completion history\n• Delete all reward redemption history\n• Delete all point deduction history\n\nThis action cannot be undone.`
+
+    if (!window.confirm(confirmMessage)) {
       return
     }
-    const result = await deleteMember({
-      token,
-      memberToDelete: { id: memberToDelete.id.toString() },
-    })
-    if (!result) {
-      toast.error("Failed to add member.")
-      return
+
+    setDeletingMemberId(memberToReset.id) // Reuse existing loading state
+    try {
+      if (!userId) {
+        toast.error("User ID is missing.")
+        return
+      }
+      console.log("Resetting member:", memberToReset.id)
+      const result = await resetMember({
+        memberId: memberToReset.id,
+      })
+      if (!result) {
+        toast.error("Failed to reset member.")
+        return
+      }
+      const updatedMembers = await getMembers({ userId })
+      setMembers(updatedMembers || [])
+      toast.success(`${memberToReset.name} has been reset successfully!`)
+    } catch (error) {
+      console.error("Error resetting member:", error)
+      toast.error("An error occurred while resetting the member.")
+    } finally {
+      setDeletingMemberId(null)
     }
-    const updatedMembers = await getMembers({ userId: userId ?? "", token })
-    setMembers(updatedMembers || [])
-    toast.success("Member deleted successfully!")
   }
 
   const handleDeductPoints = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
-    if (!selectedMember) {
-      toast.error("No member selected for point deduction.")
-      return
-    }
-    const token = await getToken({ template: "supabase" })
-    if (!token) {
-      toast.error("Failed to get the token.")
-      return
-    }
-    const updatedMember = await deductPoints({
-      token,
-      memberData: selectedMember,
-      pointsToDeduct: deductionDetails.amount,
-      reason: deductionDetails.reason,
-    })
-    if (updatedMember) {
-      const updatedMembers = await getMembers({ userId: userId ?? "", token })
-      setMembers(updatedMembers || [])
-      updateSelectedMember(updatedMembers, selectedMember.id)
-      setDeductionDetails({ reason: "", amount: 0 })
-      setIsDeductOpen(false)
-      toast.success("Points deducted successfully!")
-    } else {
-      toast.error("Failed to deduct points")
+    setDeductingPoints(true)
+    try {
+      if (!selectedMember) {
+        toast.error("No member selected for point deduction.")
+        return
+      }
+      if (!userId) {
+        toast.error("User ID is missing.")
+        return
+      }
+      console.log(
+        "Deducting points for member:",
+        selectedMember.id,
+        "amount:",
+        deductionDetails.amount
+      )
+      const updatedMember = await deductPoints({
+        memberId: selectedMember.id,
+        points: deductionDetails.amount,
+        reason: deductionDetails.reason,
+      })
+      if (updatedMember) {
+        const updatedMembers = await getMembers({ userId })
+        setMembers(updatedMembers || [])
+        updateSelectedMember(updatedMembers || [], selectedMember.id)
+        setDeductionDetails({ reason: "", amount: 0 })
+        setIsDeductOpen(false)
+        toast.success("Points deducted successfully!")
+      } else {
+        toast.error("Failed to deduct points")
+      }
+    } catch (error) {
+      console.error("Error deducting points:", error)
+      toast.error("An error occurred while deducting points.")
+    } finally {
+      setDeductingPoints(false)
     }
   }
 
@@ -200,54 +256,112 @@ const MembersPage = () => {
     setSelectedMember(updatedMember ?? null)
   }
 
+  const handleSelectMember = (member: Member) => {
+    setSelectedMember(member)
+  }
+
+  // Functions for chore/reward/deduction deletion
   const handleDeleteChore = async (member: Member, choreIndex: number) => {
-    const token = await getToken({ template: "supabase" })
-    if (!token) {
-      toast.error("Failed to get the token.")
-      return
-    }
-    if (!member) {
-      toast.error("Failed to get the member.")
-      return
-    }
-    const choreId = member.chore?.[choreIndex]?.id
-    const result = await deleteRelatedChore({
-      token,
-      memberId: member.id.toString(),
-      choreId: choreId?.toString() || "",
-    })
-    if (result) {
-      const updatedMembers: Member[] = await getMembers({
-        userId: userId ?? "",
-        token,
-      })
-      setMembers(updatedMembers || [])
-      updateSelectedMember(updatedMembers, member.id)
-      toast.success("Chore deleted successfully!")
-    } else {
-      toast.error("Failed to delete chore.")
+    setDeletingActivity(true)
+    try {
+      if (!userId) {
+        toast.error("User ID is missing.")
+        return
+      }
+
+      if (!member.chore || choreIndex >= member.chore.length) {
+        toast.error("Invalid chore selected.")
+        return
+      }
+
+      const chore = member.chore[choreIndex]
+
+      // Confirm deletion
+      if (
+        window.confirm(
+          `Are you sure you want to delete all completions of "${
+            chore.name
+          }" for ${member.name}? This will deduct ${
+            chore.points * chore.count
+          } points.`
+        )
+      ) {
+        const result = await deleteChoreCompletion({
+          memberId: member.id,
+          choreId: chore.id!,
+        })
+
+        if (result) {
+          // Refresh the members list
+          const updatedMembers = await getMembers({ userId })
+          setMembers(updatedMembers || [])
+          updateSelectedMember(updatedMembers || [], member.id)
+          toast.success(
+            `Chore completions deleted and ${
+              chore.points * chore.count
+            } points deducted from ${member.name}!`
+          )
+        } else {
+          toast.error("Failed to delete chore completions.")
+        }
+      }
+    } catch (error) {
+      console.error("Error deleting chore:", error)
+      toast.error("An error occurred while deleting the chore.")
+    } finally {
+      setDeletingActivity(false)
     }
   }
 
   const handleDeleteReward = async (member: Member, rewardIndex: number) => {
-    const token = await getToken({ template: "supabase" })
-    if (!token) {
-      toast.error("Failed to get the token.")
-      return
-    }
-    const rewardId = member.reward?.[rewardIndex]?.id
-    const result = await deleteRelatedReward({
-      token,
-      memberId: member.id.toString(),
-      rewardId: rewardId?.toString() || "",
-    })
-    if (result) {
-      const updatedMembers = await getMembers({ userId: userId ?? "", token })
-      setMembers(updatedMembers || [])
-      updateSelectedMember(updatedMembers, member.id)
-      toast.success("Reward deleted successfully!")
-    } else {
-      toast.error("Failed to delete reward.")
+    setDeletingActivity(true)
+    try {
+      if (!userId) {
+        toast.error("User ID is missing.")
+        return
+      }
+
+      if (!member.reward || rewardIndex >= member.reward.length) {
+        toast.error("Invalid reward selected.")
+        return
+      }
+
+      const reward = member.reward[rewardIndex]
+
+      // Confirm deletion
+      if (
+        window.confirm(
+          `Are you sure you want to delete all redemptions of "${
+            reward.name
+          }" for ${member.name}? This will restore ${
+            reward.points * reward.count
+          } points.`
+        )
+      ) {
+        const result = await deleteRewardRedemption({
+          memberId: member.id,
+          rewardId: reward.id,
+        })
+
+        if (result) {
+          // Refresh the members list
+          const updatedMembers = await getMembers({ userId })
+          setMembers(updatedMembers || [])
+          updateSelectedMember(updatedMembers || [], member.id)
+          toast.success(
+            `Reward redemptions deleted and ${
+              reward.points * reward.count
+            } points restored to ${member.name}!`
+          )
+        } else {
+          toast.error("Failed to delete reward redemptions.")
+        }
+      }
+    } catch (error) {
+      console.error("Error deleting reward:", error)
+      toast.error("An error occurred while deleting the reward.")
+    } finally {
+      setDeletingActivity(false)
     }
   }
 
@@ -255,28 +369,52 @@ const MembersPage = () => {
     member: Member,
     deductionIndex: number
   ) => {
-    const token = await getToken({ template: "supabase" })
-    if (!token) {
-      toast.error("Failed to get the token.")
-      return
-    }
-    const result = await deletePunishment({
-      token,
-      member,
-      punishmentIndex: deductionIndex,
-    })
-    if (result) {
-      const updatedMembers = await getMembers({ userId: userId ?? "", token })
-      setMembers(updatedMembers || [])
-      updateSelectedMember(updatedMembers, member.id)
-      toast.success("Deduction deleted successfully!")
-    } else {
-      toast.error("Failed to delete deduction.")
-    }
-  }
+    setDeletingActivity(true)
+    try {
+      if (!userId) {
+        toast.error("User ID is missing.")
+        return
+      }
 
-  const handleSelectMember = (member: Member) => {
-    setSelectedMember(member)
+      if (
+        !member.pointsDeducted ||
+        deductionIndex >= member.pointsDeducted.length
+      ) {
+        toast.error("Invalid deduction selected.")
+        return
+      }
+
+      const deduction = member.pointsDeducted[deductionIndex]
+
+      // Confirm deletion
+      if (
+        window.confirm(
+          `Are you sure you want to delete this deduction and restore ${deduction.points} points to ${member.name}?`
+        )
+      ) {
+        const result = await deleteDeduction({
+          deductionId: deduction.id,
+          memberId: member.id,
+        })
+
+        if (result) {
+          // Refresh the members list
+          const updatedMembers = await getMembers({ userId })
+          setMembers(updatedMembers || [])
+          updateSelectedMember(updatedMembers || [], member.id)
+          toast.success(
+            `Deduction deleted and ${deduction.points} points restored to ${member.name}!`
+          )
+        } else {
+          toast.error("Failed to delete deduction.")
+        }
+      }
+    } catch (error) {
+      console.error("Error deleting deduction:", error)
+      toast.error("An error occurred while deleting the deduction.")
+    } finally {
+      setDeletingActivity(false)
+    }
   }
 
   return (
@@ -293,6 +431,12 @@ const MembersPage = () => {
           onClick={() => setIsManageOpen(true)}
         >
           Manage Members
+        </button>
+        <button
+          className="btn btn-accent custom-btn ml-2"
+          onClick={() => setIsDeductOpen(true)}
+        >
+          Deduct Points
         </button>
       </Header>
       <div className="container mx-auto px-4 sm:px-6 lg:px-8">
@@ -314,17 +458,17 @@ const MembersPage = () => {
         newMember={newMember}
         setNewMember={setNewMember}
         handleAddMember={handleAddMember}
+        isLoading={addingMember}
       />
 
       <ManageMembersModal
         isManageOpen={isManageOpen}
         setIsManageOpen={setIsManageOpen}
         members={members}
-        setSelectedMember={setSelectedMember}
-        setIsDeductOpen={setIsDeductOpen}
         setIsEditOpen={setIsEditOpen}
         setMemberEdited={setMemberEdited}
         handleDeleteMember={handleDeleteMember}
+        handleResetMember={handleResetMember}
       />
 
       <EditMemberModal
@@ -341,6 +485,9 @@ const MembersPage = () => {
         deductionDetails={deductionDetails}
         setDeductionDetails={setDeductionDetails}
         handleDeductPoints={handleDeductPoints}
+        members={members}
+        selectedMember={selectedMember}
+        setSelectedMember={setSelectedMember}
       />
 
       <ViewDetailsModal

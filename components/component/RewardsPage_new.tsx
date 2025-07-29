@@ -15,18 +15,15 @@ import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { toast } from "react-toastify"
 import { Reward, Member } from "@/common.types"
-import { formatDate } from "@/lib/utils"
 import {
   getRewards,
   addReward,
   updateReward,
   deleteReward,
-  hardDeleteReward,
 } from "@/lib/requests/rewardsRequests"
 import { getMembers, redeemReward } from "@/lib/requests/membersRequests"
 import { useAuth } from "@clerk/nextjs"
 import DataWrapper from "@/components/ui/DataWrapper"
-import DeleteConfirmationDialog from "@/components/pages/common/DeleteConfirmationDialog"
 
 export default function RewardsPage() {
   const [selectedReward, setSelectedReward] = useState<Reward | null>(null)
@@ -55,12 +52,6 @@ export default function RewardsPage() {
   })
 
   const [loadingRewards, setLoadingRewards] = useState<boolean>(true)
-  const [addingReward, setAddingReward] = useState<boolean>(false)
-  const [editingReward, setEditingReward] = useState<boolean>(false)
-  const [deletingReward, setDeletingReward] = useState<boolean>(false)
-  const [redeemingReward, setRedeemingReward] = useState<boolean>(false)
-  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState<boolean>(false)
-  const [rewardToDelete, setRewardToDelete] = useState<Reward | null>(null)
   const { userId } = useAuth()
 
   useEffect(() => {
@@ -100,86 +91,37 @@ export default function RewardsPage() {
       return
     }
 
-    setAddingReward(true)
-    try {
-      const result = await addReward({ userId, newReward })
-      if (result) {
-        await loadRewardsAndMembers()
-        setIsAddOpen(false)
-        setNewReward({ name: "", description: "", points: 0 })
-        toast.success("Reward added successfully!")
-      } else {
-        toast.error("Failed to add reward")
-      }
-    } catch (error) {
-      console.error("Error adding reward:", error)
-      toast.error("An error occurred while adding the reward.")
-    } finally {
-      setAddingReward(false)
+    const result = await addReward({ userId, newReward })
+    if (result) {
+      await loadRewardsAndMembers()
+      setIsAddOpen(false)
+      setNewReward({ name: "", description: "", points: 0 })
+      toast.success("Reward added successfully!")
+    } else {
+      toast.error("Failed to add reward")
     }
   }
 
   // Edit Reward Function
   const handleEditReward = async () => {
-    setEditingReward(true)
-    try {
-      const result = await updateReward({ rewardEdited })
-      if (result) {
-        await loadRewardsAndMembers()
-        setIsEditOpen(false)
-        toast.success("Reward updated successfully!")
-      } else {
-        toast.error("Failed to update reward")
-      }
-    } catch (error) {
-      console.error("Error updating reward:", error)
-      toast.error("An error occurred while updating the reward.")
-    } finally {
-      setEditingReward(false)
+    const result = await updateReward({ rewardEdited })
+    if (result) {
+      await loadRewardsAndMembers()
+      setIsEditOpen(false)
+      toast.success("Reward updated successfully!")
+    } else {
+      toast.error("Failed to update reward")
     }
   }
 
   // Delete Reward Function
-  const handleDeleteReward = async (reward: Reward) => {
-    setRewardToDelete(reward)
-    setIsDeleteConfirmOpen(true)
-  }
-
-  const handleConfirmDelete = async (deleteData: boolean) => {
-    if (!rewardToDelete || !userId) {
-      toast.error("Missing required information.")
-      return
-    }
-
-    setDeletingReward(true)
-    setIsDeleteConfirmOpen(false)
-
-    try {
-      let result
-      if (deleteData) {
-        // Hard delete - removes all redemption data and restores member points
-        result = await hardDeleteReward({ rewardId: rewardToDelete.id })
-      } else {
-        // Soft delete - preserves member data
-        result = await deleteReward({ rewardId: rewardToDelete.id })
-      }
-
-      if (result) {
-        await loadRewardsAndMembers()
-        toast.success(
-          deleteData
-            ? "Reward deleted and all redemption data removed from members!"
-            : "Reward deleted successfully! Member redemption data preserved."
-        )
-      } else {
-        toast.error("Failed to delete reward.")
-      }
-    } catch (error) {
-      console.error("Error deleting reward:", error)
-      toast.error("An error occurred while deleting the reward.")
-    } finally {
-      setDeletingReward(false)
-      setRewardToDelete(null)
+  const handleDeleteReward = async (rewardId: number) => {
+    const result = await deleteReward({ rewardId })
+    if (result) {
+      await loadRewardsAndMembers()
+      toast.success("Reward deleted successfully!")
+    } else {
+      toast.error("Failed to delete reward")
     }
   }
 
@@ -200,27 +142,19 @@ export default function RewardsPage() {
       return
     }
 
-    setRedeemingReward(true)
-    try {
-      const result = await redeemReward({
-        memberId: selectedMember.id,
-        rewardId: selectedReward.id,
-      })
+    const result = await redeemReward({
+      memberId: selectedMember.id,
+      rewardId: selectedReward.id,
+    })
 
-      if (result) {
-        await loadRewardsAndMembers()
-        setIsRedeemOpen(false)
-        setSelectedReward(null)
-        setSelectedMember(null)
-        toast.success("Reward redeemed successfully!")
-      } else {
-        toast.error("Failed to redeem reward")
-      }
-    } catch (error) {
-      console.error("Error redeeming reward:", error)
-      toast.error("An error occurred while redeeming the reward.")
-    } finally {
-      setRedeemingReward(false)
+    if (result) {
+      await loadRewardsAndMembers()
+      setIsRedeemOpen(false)
+      setSelectedReward(null)
+      setSelectedMember(null)
+      toast.success("Reward redeemed successfully!")
+    } else {
+      toast.error("Failed to redeem reward")
     }
   }
 
@@ -296,7 +230,7 @@ export default function RewardsPage() {
                           </div>
                           <div className="flex justify-between text-sm">
                             <span>Redeemed:</span>
-                            <span>{reward.count || 0} times</span>
+                            <span>{reward.members?.length || 0} times</span>
                           </div>
                         </div>
                       </div>
@@ -308,7 +242,7 @@ export default function RewardsPage() {
                           <LuPencil className="h-4 w-4" />
                         </button>
                         <button
-                          onClick={() => handleDeleteReward(reward)}
+                          onClick={() => handleDeleteReward(reward.id)}
                           className="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground h-8 w-8 text-destructive"
                         >
                           <LuTrash className="h-4 w-4" />
@@ -403,17 +337,9 @@ export default function RewardsPage() {
               </button>
               <button
                 onClick={handleAddReward}
-                disabled={addingReward}
                 className="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-10 px-4 py-2"
               >
-                {addingReward ? (
-                  <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                    Adding...
-                  </>
-                ) : (
-                  "Add Reward"
-                )}
+                Add Reward
               </button>
             </DialogFooter>
           </DialogContent>
@@ -485,17 +411,9 @@ export default function RewardsPage() {
               </button>
               <button
                 onClick={handleEditReward}
-                disabled={editingReward}
                 className="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-10 px-4 py-2"
               >
-                {editingReward ? (
-                  <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                    Saving...
-                  </>
-                ) : (
-                  "Save Changes"
-                )}
+                Save Changes
               </button>
             </DialogFooter>
           </DialogContent>
@@ -564,20 +482,12 @@ export default function RewardsPage() {
               <button
                 onClick={handleRedeemReward}
                 disabled={
-                  redeemingReward ||
                   !selectedMember ||
                   selectedMember.points < (selectedReward?.points || 0)
                 }
                 className="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-10 px-4 py-2"
               >
-                {redeemingReward ? (
-                  <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                    Redeeming...
-                  </>
-                ) : (
-                  `Redeem (-${selectedReward?.points} pts)`
-                )}
+                Redeem (-{selectedReward?.points} pts)
               </button>
             </DialogFooter>
           </DialogContent>
@@ -603,7 +513,7 @@ export default function RewardsPage() {
                 <div>
                   <Label className="text-sm font-medium">Times Redeemed</Label>
                   <p className="text-2xl font-bold">
-                    {selectedReward?.count || 0}
+                    {selectedReward?.members?.length || 0}
                   </p>
                 </div>
               </div>
@@ -620,34 +530,17 @@ export default function RewardsPage() {
                   Redemption History
                 </Label>
                 <div className="mt-2 space-y-2 max-h-40 overflow-y-auto">
-                  {selectedReward?.members &&
-                  selectedReward.members.length > 0 ? (
-                    <div className="space-y-2">
-                      <div className="text-sm text-muted-foreground mb-2">
-                        Total redemptions: {selectedReward.count || 0}
-                      </div>
-                      {selectedReward.members.map((member, memberIndex) =>
-                        member.date?.map((date, dateIndex) => (
-                          <div
-                            key={`${memberIndex}-${dateIndex}`}
-                            className="flex justify-between items-center p-2 bg-muted rounded"
-                          >
-                            <div className="flex items-center gap-2">
-                              <span className="text-sm font-medium">
-                                {member.name}
-                              </span>
-                              <span className="text-xs bg-primary/10 text-primary px-2 py-1 rounded">
-                                -{selectedReward.points} pts
-                              </span>
-                            </div>
-                            <span className="text-sm text-muted-foreground">
-                              {formatDate(date)}
-                            </span>
-                          </div>
-                        ))
-                      )}
+                  {selectedReward?.members?.map((member, index) => (
+                    <div
+                      key={index}
+                      className="flex justify-between items-center p-2 bg-muted rounded"
+                    >
+                      <span>{member.name}</span>
+                      <span className="text-sm text-muted-foreground">
+                        {member.count} time{member.count !== 1 ? "s" : ""}
+                      </span>
                     </div>
-                  ) : (
+                  )) || (
                     <p className="text-muted-foreground">
                       No one has redeemed this reward yet.
                     </p>
@@ -665,17 +558,6 @@ export default function RewardsPage() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
-
-        {/* Delete Confirmation Dialog */}
-        <DeleteConfirmationDialog
-          isOpen={isDeleteConfirmOpen}
-          setIsOpen={setIsDeleteConfirmOpen}
-          title={`Delete ${rewardToDelete?.name}`}
-          itemName={rewardToDelete?.name || ""}
-          itemType="reward"
-          onConfirm={handleConfirmDelete}
-          isLoading={deletingReward}
-        />
       </div>
     </div>
   )

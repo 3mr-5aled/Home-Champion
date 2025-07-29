@@ -27,7 +27,7 @@ const ViewDetailsModal = ({
   handleDeleteDeduction,
 }: ViewDetailsModalProps) => (
   <Dialog open={isViewDetailsOpen} onOpenChange={setIsViewDetailsOpen}>
-    <DialogContent className="sm:max-w-[425px]">
+    <DialogContent className="sm:max-w-[600px] max-h-[80vh] overflow-y-auto">
       <DialogHeader>
         <DialogTitle>Member Details</DialogTitle>
         <DialogDescription>
@@ -55,9 +55,39 @@ const ViewDetailsModal = ({
           <div>
             <div>
               Points:{" "}
-              <span className="capitalize font-semibold">
+              <span
+                className={`capitalize font-semibold ${
+                  selectedMember.points < 0 ? "text-red-500" : ""
+                }`}
+              >
                 {selectedMember.points}
               </span>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-4 p-3 bg-base-200 rounded-lg">
+            <div className="text-center">
+              <div className="text-sm text-muted-foreground">Total Earned</div>
+              <div className="font-bold text-success">
+                +
+                {selectedMember.chore?.reduce(
+                  (total, chore) => total + (chore.count * chore.points || 0),
+                  0
+                ) || 0}{" "}
+                points
+              </div>
+            </div>
+            <div className="text-center">
+              <div className="text-sm text-muted-foreground">
+                Total Deducted
+              </div>
+              <div className="font-bold text-error">
+                -
+                {selectedMember.pointsDeducted?.reduce(
+                  (total, deduction) => total + (deduction.points || 0),
+                  0
+                ) || 0}{" "}
+                points
+              </div>
             </div>
           </div>
           <div className="grid gap-4">
@@ -85,23 +115,36 @@ const ViewDetailsModal = ({
                     <div className="font-semibold">
                       {chore.name}{" "}
                       <span className="badge badge-primary badge-md">
-                        {chore.count}
+                        {chore.count} times
+                      </span>
+                      <span className="badge badge-secondary badge-md ml-2">
+                        {chore.points * chore.count} points earned
                       </span>
                     </div>
                   </div>
-                  <div className="collapse-content px-7 flex flex-row justify-between items-center">
-                    <ol className="list-decimal">
-                      {chore.date.map((date) => (
-                        <li key={date}>{formatDate(date)}</li>
-                      ))}
-                    </ol>
-                    <button
-                      className="btn btn-error btn-sm"
-                      onClick={() => handleDeleteChore(selectedMember, index)}
-                    >
-                      Delete chore
-                      <LuTrash />
-                    </button>
+                  <div className="collapse-content px-7 flex flex-col gap-2">
+                    <div className="text-sm text-muted-foreground mb-2">
+                      Points per completion: {chore.points}
+                    </div>
+                    <div className="flex flex-row justify-between items-start">
+                      <div>
+                        <strong>Completion Dates:</strong>
+                        <ol className="list-decimal ml-4 mt-1">
+                          {chore.date.map((date, dateIndex) => (
+                            <li key={dateIndex} className="text-sm">
+                              {formatDate(date)} ({chore.points} points)
+                            </li>
+                          ))}
+                        </ol>
+                      </div>
+                      <button
+                        className="btn btn-error btn-sm"
+                        onClick={() => handleDeleteChore(selectedMember, index)}
+                      >
+                        Delete chore
+                        <LuTrash />
+                      </button>
+                    </div>
                   </div>
                 </div>
               ))
@@ -135,24 +178,39 @@ const ViewDetailsModal = ({
                   <div className="collapse-title text-xl font-medium">
                     <div className="font-semibold">
                       {reward.name}{" "}
-                      <span className="badge badge-primary badge-md">
-                        {reward.count}
+                      <span className="badge badge-warning badge-md">
+                        {reward.count} times
+                      </span>
+                      <span className="badge badge-secondary badge-md ml-2">
+                        {reward.points * reward.count} points spent
                       </span>
                     </div>
                   </div>
-                  <div className="collapse-content px-7 flex flex-row justify-between items-center">
-                    <ol className="list-decimal">
-                      {reward.date.map((date) => (
-                        <li key={date}>{formatDate(date)}</li>
-                      ))}
-                    </ol>
-                    <button
-                      className="btn btn-error btn-sm"
-                      onClick={() => handleDeleteReward(selectedMember, index)}
-                    >
-                      Delete reward
-                      <LuTrash />
-                    </button>
+                  <div className="collapse-content px-7 flex flex-col gap-2">
+                    <div className="text-sm text-muted-foreground mb-2">
+                      Points per reward: {reward.points}
+                    </div>
+                    <div className="flex flex-row justify-between items-start">
+                      <div>
+                        <strong>Redemption Dates:</strong>
+                        <ol className="list-decimal ml-4 mt-1">
+                          {reward.date.map((date, dateIndex) => (
+                            <li key={dateIndex} className="text-sm">
+                              {formatDate(date)} ({reward.points} points)
+                            </li>
+                          ))}
+                        </ol>
+                      </div>
+                      <button
+                        className="btn btn-error btn-sm"
+                        onClick={() =>
+                          handleDeleteReward(selectedMember, index)
+                        }
+                      >
+                        Delete reward
+                        <LuTrash />
+                      </button>
+                    </div>
                   </div>
                 </div>
               ))
@@ -183,10 +241,22 @@ const ViewDetailsModal = ({
                       aria-label="Toggle deduction details"
                     />
                     <div className="collapse-title text-xl font-medium">
-                      <div className="font-semibold">{deduction.reason}</div>
+                      <div className="font-semibold">
+                        {deduction.reason}{" "}
+                        <span className="badge badge-error badge-md">
+                          -{deduction.points} points
+                        </span>
+                      </div>
                     </div>
                     <div className="collapse-content px-7 flex flex-row justify-between items-center">
-                      {formatDate(deduction.date)}
+                      <div>
+                        <div className="text-sm">
+                          <strong>Date:</strong> {formatDate(deduction.date)}
+                        </div>
+                        <div className="text-sm text-error">
+                          <strong>Points Deducted:</strong> {deduction.points}
+                        </div>
+                      </div>
                       <button
                         className="btn btn-error btn-sm"
                         onClick={() =>

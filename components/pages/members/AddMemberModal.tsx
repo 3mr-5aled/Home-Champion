@@ -17,6 +17,7 @@ interface AddMemberModalProps {
   newMember: Member
   setNewMember: (member: Member) => void
   handleAddMember: (e: React.FormEvent<HTMLFormElement>) => void
+  isLoading?: boolean
 }
 
 const AddMemberModal: React.FC<AddMemberModalProps> = ({
@@ -25,6 +26,7 @@ const AddMemberModal: React.FC<AddMemberModalProps> = ({
   newMember,
   setNewMember,
   handleAddMember,
+  isLoading = false,
 }) => (
   <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
     <DialogContent className="sm:max-w-[425px]">
@@ -56,24 +58,34 @@ const AddMemberModal: React.FC<AddMemberModalProps> = ({
             </Label>
             <select
               className=" col-span-3 select select-bordered w-full max-w-xs"
-              value={newMember.role}
-              defaultValue="RelationShip"
+              value={newMember.role || ""}
               required
               onChange={(e) =>
                 setNewMember({ ...newMember, role: e.target.value })
               }
             >
-              <option disabled>RelationShip</option>
+              <option value="" disabled>
+                Select Relationship
+              </option>
               <option value="son">Son</option>
               <option value="daughter">Daughter</option>
-              <option value="parent">Parent</option>
-              <option value="other">Other</option>
             </select>
           </div>
         </div>
         <DialogFooter>
-          <button type="submit" className="btn btn-primary custom-btn">
-            Add Member
+          <button
+            type="submit"
+            className="btn btn-primary custom-btn"
+            disabled={isLoading}
+          >
+            {isLoading ? (
+              <div className="flex items-center gap-2">
+                <div className="loading loading-spinner loading-sm"></div>
+                Adding...
+              </div>
+            ) : (
+              "Add Member"
+            )}
           </button>
         </DialogFooter>
       </form>

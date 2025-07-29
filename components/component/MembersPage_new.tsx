@@ -40,9 +40,9 @@ export default function MembersPage() {
       const fetchedMembers: Member[] | null = await getMembers({
         userId,
       })
-      console.log("Fetched members:", fetchedMembers)
       setMembers(fetchedMembers ?? [])
       setLoadingMembers(false)
+      console.log(fetchedMembers)
     }
     loadMembers()
   }, [userId])
@@ -101,11 +101,6 @@ export default function MembersPage() {
 
   // Delete Member Function
   const handleDeleteMember = async (memberId: number) => {
-    console.log(
-      "Attempting to delete member with ID:",
-      memberId,
-      typeof memberId
-    )
     const result = await deleteMember({
       memberId,
     })
@@ -140,10 +135,7 @@ export default function MembersPage() {
 
   // Deduct Points Function
   const handleDeductPoints = async () => {
-    if (!selectedMember || !selectedMember.id) {
-      toast.error("Invalid member selected")
-      return
-    }
+    if (!selectedMember) return
 
     const result = await deductPoints({
       memberId: selectedMember.id,
@@ -174,20 +166,14 @@ export default function MembersPage() {
     setIsEditOpen(true)
   }
 
-  const openDeductDialog = (member: Member) => {
-    console.log("Opening deduct dialog for member:", member.id, member.name)
-    setSelectedMember(member)
-    setIsDeductOpen(true)
-  }
-
   const openViewDetailsDialog = (member: Member) => {
-    console.log(
-      "Opening view details dialog for member:",
-      member.id,
-      member.name
-    )
     setSelectedMember(member)
     setIsViewDetailsOpen(true)
+  }
+
+  const openDeductDialog = (member: Member) => {
+    setSelectedMember(member)
+    setIsDeductOpen(true)
   }
 
   return (
@@ -222,8 +208,9 @@ export default function MembersPage() {
 
         {/* Members Grid */}
         <DataWrapper
-          data={loadingMembers ? null : members}
-          noDataMessage="No family members found. Add some members to get started!"
+          data={members}
+          loading={loadingMembers}
+          emptyMessage="No family members found. Add some members to get started!"
         >
           {() => (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

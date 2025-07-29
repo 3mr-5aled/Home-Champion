@@ -57,14 +57,15 @@ const EditMemberModal: React.FC<EditMemberModalProps> = ({
             <select
               id="relationship"
               className="col-span-3 select select-bordered w-full max-w-xs"
-              value={memberEdited.role}
-              defaultValue="RelationShip"
+              value={memberEdited.role || ""}
               required
               onChange={(e) =>
                 setMemberEdited({ ...memberEdited, role: e.target.value })
               }
             >
-              <option disabled>RelationShip</option>
+              <option value="" disabled>
+                Select Relationship
+              </option>
               <option value="son">Son</option>
               <option value="daughter">Daughter</option>
               <option value="parent">Parent</option>

@@ -19,12 +19,6 @@ export async function getMembers({ userId }: { userId: string }) {
         count,
         date,
         chore:chore(*)
-      ),
-      pointsDeducted:points_deduction(
-        id,
-        points,
-        reason,
-        created_at
       )
     `
     )
@@ -58,12 +52,6 @@ export async function getMembers({ userId }: { userId: string }) {
         created_at: c.chore.created_at,
         members: [], // Will be populated if needed
       })),
-      pointsDeducted: member.pointsDeducted.map((d: any) => ({
-        id: d.id,
-        points: d.points,
-        reason: d.reason,
-        date: d.created_at,
-      })),
     }
   })
 
@@ -79,15 +67,26 @@ export const addMember = async ({
   newMember: Partial<Member>
 }) => {
   try {
-    // Directly insert with clerk_user_id
+    // Get user from Supabase users table
+    const { data: user } = await supabase
+      .from("users")
+      .select("id")
+      .eq("clerk_user_id", userId)
+      .single()
+
+    if (!user) {
+      console.error("User not found")
+      return null
+    }
+
+    // Perform the insertion
     const { data, error } = await supabase
       .from("members")
       .insert([
         {
+          user_id: user.id,
           clerk_user_id: userId,
-          name: newMember.name,
-          role: newMember.role || "member",
-          points: 0,
+          ...newMember,
         },
       ])
       .select("*")
@@ -113,17 +112,9 @@ export const updateMember = async ({
   memberEdited: Member
 }) => {
   try {
-    // Only include valid database columns for update
-    const updateData = {
-      name: memberEdited.name,
-      points: memberEdited.points,
-      role: memberEdited.role,
-      // Don't include client-side properties like chore, reward, etc.
-    }
-
     const { data, error } = await supabase
       .from("members")
-      .update(updateData)
+      .update(memberEdited)
       .eq("id", memberEdited.id)
       .select("*")
 
@@ -183,7 +174,7 @@ export const deductPoints = async ({
       return null
     }
 
-    const newPoints = member.points - points
+    const newPoints = Math.max(0, member.points - points)
 
     // Update member points
     const { data: updatedMember, error: updateError } = await supabase
@@ -412,274 +403,6 @@ export const redeemReward = async ({
     return updatedMember
   } catch (error) {
     console.error("Error redeeming reward:", (error as Error).message)
-    return null
-  }
-}
-
-// Delete a point deduction and restore the points
-export const deleteDeduction = async ({
-  deductionId,
-  memberId,
-}: {
-  deductionId: number
-  memberId: number
-}) => {
-  try {
-    // First, get the deduction details to know how many points to restore
-    const { data: deduction, error: fetchError } = await supabase
-      .from("points_deduction")
-      .select("points")
-      .eq("id", deductionId)
-      .single()
-
-    if (fetchError || !deduction) {
-      console.error("Error fetching deduction:", fetchError?.message)
-      return null
-    }
-
-    // Get current member points
-    const { data: member, error: memberError } = await supabase
-      .from("members")
-      .select("points")
-      .eq("id", memberId)
-      .single()
-
-    if (memberError || !member) {
-      console.error("Error fetching member:", memberError?.message)
-      return null
-    }
-
-    // Restore the points by adding them back
-    const newPoints = member.points + deduction.points
-
-    // Update member points
-    const { data: updatedMember, error: updateError } = await supabase
-      .from("members")
-      .update({ points: newPoints })
-      .eq("id", memberId)
-      .select("*")
-
-    if (updateError) {
-      console.error("Error updating member points:", updateError.message)
-      return null
-    }
-
-    // Delete the deduction record
-    const { error: deleteError } = await supabase
-      .from("points_deduction")
-      .delete()
-      .eq("id", deductionId)
-
-    if (deleteError) {
-      console.error("Error deleting deduction:", deleteError.message)
-      return null
-    }
-
-    return updatedMember
-  } catch (error) {
-    console.error("Error deleting deduction:", (error as Error).message)
-    return null
-  }
-}
-
-// Delete a chore completion record
-export const deleteChoreCompletion = async ({
-  memberId,
-  choreId,
-}: {
-  memberId: number
-  choreId: number
-}) => {
-  try {
-    // Get the current record to know how many points to deduct
-    const { data: record, error: fetchError } = await supabase
-      .from("member_chore")
-      .select("count, chore:chore(points)")
-      .eq("member_id", memberId)
-      .eq("chore_id", choreId)
-      .single()
-
-    if (fetchError || !record) {
-      console.error("Error fetching chore record:", fetchError?.message)
-      return null
-    }
-
-    // Calculate points to deduct (points per chore * number of completions)
-    const pointsToDeduct = (record.chore as any).points * record.count
-
-    // Get current member points
-    const { data: member, error: memberError } = await supabase
-      .from("members")
-      .select("points")
-      .eq("id", memberId)
-      .single()
-
-    if (memberError || !member) {
-      console.error("Error fetching member:", memberError?.message)
-      return null
-    }
-
-    // Update member points (subtract the earned points)
-    const newPoints = member.points - pointsToDeduct
-
-    const { data: updatedMember, error: updateError } = await supabase
-      .from("members")
-      .update({ points: newPoints })
-      .eq("id", memberId)
-      .select("*")
-
-    if (updateError) {
-      console.error("Error updating member points:", updateError.message)
-      return null
-    }
-
-    // Delete the chore completion record
-    const { error: deleteError } = await supabase
-      .from("member_chore")
-      .delete()
-      .eq("member_id", memberId)
-      .eq("chore_id", choreId)
-
-    if (deleteError) {
-      console.error("Error deleting chore record:", deleteError.message)
-      return null
-    }
-
-    return updatedMember
-  } catch (error) {
-    console.error("Error deleting chore completion:", (error as Error).message)
-    return null
-  }
-}
-
-// Delete a reward redemption record
-export const deleteRewardRedemption = async ({
-  memberId,
-  rewardId,
-}: {
-  memberId: number
-  rewardId: number
-}) => {
-  try {
-    // Get the current record to know how many points to restore
-    const { data: record, error: fetchError } = await supabase
-      .from("member_reward")
-      .select("count, reward:reward(points)")
-      .eq("member_id", memberId)
-      .eq("reward_id", rewardId)
-      .single()
-
-    if (fetchError || !record) {
-      console.error("Error fetching reward record:", fetchError?.message)
-      return null
-    }
-
-    // Calculate points to restore (points per reward * number of redemptions)
-    const pointsToRestore = (record.reward as any).points * record.count
-
-    // Get current member points
-    const { data: member, error: memberError } = await supabase
-      .from("members")
-      .select("points")
-      .eq("id", memberId)
-      .single()
-
-    if (memberError || !member) {
-      console.error("Error fetching member:", memberError?.message)
-      return null
-    }
-
-    // Update member points (add back the spent points)
-    const newPoints = member.points + pointsToRestore
-
-    const { data: updatedMember, error: updateError } = await supabase
-      .from("members")
-      .update({ points: newPoints })
-      .eq("id", memberId)
-      .select("*")
-
-    if (updateError) {
-      console.error("Error updating member points:", updateError.message)
-      return null
-    }
-
-    // Delete the reward redemption record
-    const { error: deleteError } = await supabase
-      .from("member_reward")
-      .delete()
-      .eq("member_id", memberId)
-      .eq("reward_id", rewardId)
-
-    if (deleteError) {
-      console.error("Error deleting reward record:", deleteError.message)
-      return null
-    }
-
-    return updatedMember
-  } catch (error) {
-    console.error("Error deleting reward redemption:", (error as Error).message)
-    return null
-  }
-}
-
-// Reset member points and history
-export async function resetMember({ memberId }: { memberId: number }) {
-  try {
-    // Reset member points to 0
-    const { data: updatedMember, error: updateError } = await supabase
-      .from("members")
-      .update({ points: 0 })
-      .eq("id", memberId)
-      .select()
-      .single()
-
-    if (updateError) {
-      console.error("Error resetting member points:", updateError.message)
-      return null
-    }
-
-    // Delete all chore completions for this member
-    const { error: choreError } = await supabase
-      .from("member_chore")
-      .delete()
-      .eq("member_id", memberId)
-
-    if (choreError) {
-      console.error("Error deleting member chore history:", choreError.message)
-      return null
-    }
-
-    // Delete all reward redemptions for this member
-    const { error: rewardError } = await supabase
-      .from("member_reward")
-      .delete()
-      .eq("member_id", memberId)
-
-    if (rewardError) {
-      console.error(
-        "Error deleting member reward history:",
-        rewardError.message
-      )
-      return null
-    }
-
-    // Delete all point deductions for this member
-    const { error: deductionError } = await supabase
-      .from("points_deduction")
-      .delete()
-      .eq("member_id", memberId)
-
-    if (deductionError) {
-      console.error(
-        "Error deleting member deduction history:",
-        deductionError.message
-      )
-      return null
-    }
-
-    return updatedMember
-  } catch (error) {
-    console.error("Error resetting member:", (error as Error).message)
     return null
   }
 }

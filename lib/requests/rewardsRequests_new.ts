@@ -18,7 +18,6 @@ export async function getRewards({ userId }: { userId: string }) {
       `
       )
       .eq("clerk_user_id", userId)
-      .is("deleted_at", null)
 
     if (rewardsError) {
       console.error("Error fetching rewards:", rewardsError)
@@ -27,21 +26,9 @@ export async function getRewards({ userId }: { userId: string }) {
 
     // Process the data to match the desired schema
     const processedRewards = rewards.map((reward) => {
-      const memberRedemptions = reward.members || []
-      const totalCount = memberRedemptions.reduce(
-        (sum: number, m: any) => sum + (m.count || 0),
-        0
-      )
-      const allDates = memberRedemptions.reduce(
-        (dates: string[], m: any) => [...dates, ...(m.date || [])],
-        []
-      )
-
       return {
         ...reward,
-        count: totalCount,
-        date: allDates,
-        members: memberRedemptions.map((m: any) => ({
+        members: reward.members.map((m: any) => ({
           ...m.member,
           count: m.count,
           date: m.date,
@@ -65,15 +52,26 @@ export const addReward = async ({
   newReward: Partial<Reward>
 }) => {
   try {
-    // Directly insert with clerk_user_id
+    // Get user from Supabase users table
+    const { data: user } = await supabase
+      .from("users")
+      .select("id")
+      .eq("clerk_user_id", userId)
+      .single()
+
+    if (!user) {
+      console.error("User not found")
+      return null
+    }
+
+    // Perform the insertion
     const { data, error } = await supabase
       .from("reward")
       .insert([
         {
+          user_id: user.id,
           clerk_user_id: userId,
-          name: newReward.name,
-          description: newReward.description || "",
-          points: newReward.points || 0,
+          ...newReward,
         },
       ])
       .select("*")
@@ -97,17 +95,9 @@ export const updateReward = async ({
   rewardEdited: Reward
 }) => {
   try {
-    // Only include valid database columns for update
-    const updateData = {
-      name: rewardEdited.name,
-      description: rewardEdited.description,
-      points: rewardEdited.points,
-      // Don't include client-side properties like members, count, date, etc.
-    }
-
     const { data, error } = await supabase
       .from("reward")
-      .update(updateData)
+      .update(rewardEdited)
       .eq("id", rewardEdited.id)
       .select("*")
 
@@ -123,13 +113,12 @@ export const updateReward = async ({
   }
 }
 
-// Delete a reward (soft delete to preserve member data)
+// Delete a reward
 export const deleteReward = async ({ rewardId }: { rewardId: number }) => {
   try {
-    // Instead of hard delete, mark as deleted to preserve member relationship data
     const { data, error } = await supabase
       .from("reward")
-      .update({ deleted_at: new Date().toISOString() })
+      .delete()
       .eq("id", rewardId)
       .select("*")
 
@@ -141,65 +130,6 @@ export const deleteReward = async ({ rewardId }: { rewardId: number }) => {
     return data
   } catch (error) {
     console.error("Error deleting reward:", (error as Error).message)
-    return null
-  }
-}
-
-// Hard delete a reward (removes all redemption data and restores member points)
-export const hardDeleteReward = async ({ rewardId }: { rewardId: number }) => {
-  try {
-    // First, get all member redemptions for this reward to restore points
-    const { data: redemptions, error: redemptionsError } = await supabase
-      .from("member_reward")
-      .select("member_id, count, reward:reward(points)")
-      .eq("reward_id", rewardId)
-
-    if (redemptionsError) {
-      console.error("Error fetching redemptions:", redemptionsError.message)
-      return null
-    }
-
-    // Restore points to members
-    if (redemptions && redemptions.length > 0) {
-      for (const redemption of redemptions) {
-        const pointsToRestore =
-          redemption.count * (redemption.reward as any).points
-
-        // Get current member points
-        const { data: member, error: memberError } = await supabase
-          .from("members")
-          .select("points")
-          .eq("id", redemption.member_id)
-          .single()
-
-        if (memberError || !member) continue
-
-        // Update member points (restore points)
-        await supabase
-          .from("members")
-          .update({ points: member.points + pointsToRestore })
-          .eq("id", redemption.member_id)
-      }
-    }
-
-    // Delete member_reward relationships
-    await supabase.from("member_reward").delete().eq("reward_id", rewardId)
-
-    // Delete the reward itself
-    const { data, error } = await supabase
-      .from("reward")
-      .delete()
-      .eq("id", rewardId)
-      .select("*")
-
-    if (error) {
-      console.error("Error hard deleting reward:", error.message)
-      return null
-    }
-
-    return data
-  } catch (error) {
-    console.error("Error hard deleting reward:", (error as Error).message)
     return null
   }
 }

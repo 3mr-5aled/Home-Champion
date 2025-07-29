@@ -10,6 +10,8 @@ import {
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
+import { Select } from "@/components/ui/select"
+import { Member } from "@/common.types"
 
 interface DeductionDetails {
   reason: string
@@ -22,6 +24,9 @@ interface DeductPointsModalProps {
   deductionDetails: DeductionDetails
   setDeductionDetails: Dispatch<SetStateAction<DeductionDetails>>
   handleDeductPoints: (e: FormEvent<HTMLFormElement>) => void
+  members: Member[]
+  selectedMember: Member | null
+  setSelectedMember: (member: Member | null) => void
 }
 
 const DeductPointsModal: React.FC<DeductPointsModalProps> = ({
@@ -30,6 +35,9 @@ const DeductPointsModal: React.FC<DeductPointsModalProps> = ({
   deductionDetails,
   setDeductionDetails,
   handleDeductPoints,
+  members,
+  selectedMember,
+  setSelectedMember,
 }) => (
   <Dialog open={isDeductOpen} onOpenChange={setIsDeductOpen}>
     <DialogContent className="sm:max-w-[425px]">
@@ -41,6 +49,30 @@ const DeductPointsModal: React.FC<DeductPointsModalProps> = ({
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-4 py-4">
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="member" className="text-right col-span-1">
+              Member
+            </Label>
+            <select
+              id="member"
+              required
+              value={selectedMember?.id || ""}
+              onChange={(e) => {
+                const member = members.find(
+                  (m) => m.id === Number(e.target.value)
+                )
+                setSelectedMember(member || null)
+              }}
+              className="col-span-3 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">Select a member</option>
+              {members.map((member) => (
+                <option key={member.id} value={member.id}>
+                  {member.name} ({member.points} points)
+                </option>
+              ))}
+            </select>
+          </div>
           <div className="grid grid-cols-4 items-center gap-4">
             <Label htmlFor="reason" className="text-right col-span-1">
               Reason

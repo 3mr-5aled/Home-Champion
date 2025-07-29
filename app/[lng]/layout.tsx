@@ -5,6 +5,7 @@ import { languages, fallbackLng } from "@/app/i18n/settings"
 import { useTranslation } from "@/app/i18n"
 import { ToastContainer } from "react-toastify"
 import "react-toastify/dist/ReactToastify.css"
+import { UserSyncProvider } from "@/components/providers/UserSyncProvider"
 
 export async function generateStaticParams() {
   return languages.map((lng) => ({ lng }))
@@ -23,7 +24,7 @@ export async function generateMetadata({
   return {
     title: t("Home-Champion"),
     content:
-      "A playground to explore new Next.js 13/14 app directory features such as nested layouts, instant loading states, streaming, and component level data fetching.",
+      "A fun and rewarding way to manage family chores! Built with Next.js, TypeScript, TailwindCSS, DaisyUI, Supabase, and Clerk.",
   }
 }
 
@@ -40,19 +41,21 @@ export default function RootLayout({
     <html lang={lng} dir={dir(lng)}>
       <body>
         <ClerkProvider>
-          <ToastContainer
-            position="bottom-center"
-            autoClose={5000}
-            hideProgressBar
-            newestOnTop={false}
-            closeOnClick
-            rtl={false}
-            pauseOnFocusLoss
-            draggable
-            pauseOnHover
-            theme="dark"
-          />
-          {children}
+          <UserSyncProvider>
+            <ToastContainer
+              position="bottom-center"
+              autoClose={5000}
+              hideProgressBar
+              newestOnTop={false}
+              closeOnClick
+              rtl={false}
+              pauseOnFocusLoss
+              draggable
+              pauseOnHover
+              theme="dark"
+            />
+            {children}
+          </UserSyncProvider>
         </ClerkProvider>
       </body>
     </html>
