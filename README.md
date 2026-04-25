@@ -33,6 +33,7 @@ A fun and rewarding way to manage family chores! Built with **Next.js**, **TypeS
 
 ## 🌗 Features
 
+- 🎨 **Neobrutalism** web design
 - 🔐 **Clerk-powered authentication**
 - 🧑‍💻 User & family member management
 - 🧹 Task tracking and point-based rewards
